@@ -3,6 +3,8 @@ const app = express();
 const fs = require("fs");
 const ejs = require("ejs");
 app.set("view engine", "ejs");
+const path = require("path");
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
