@@ -45,7 +45,7 @@ MiniBlog/
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone <https://github.com/Lakshya7km/mini-blog/>
 cd MiniBlog
 Install dependencies:
 
