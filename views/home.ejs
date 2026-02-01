@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Blog</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        main {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .post {
+            background: white;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .post h3 {
+            margin: 0 0 10px 0;
+            color: #007bff;
+        }
+        .post p {
+            margin: 0;
+            color: #333;
+        }
+        .no-posts {
+            text-align: center;
+            font-style: italic;
+            color: #888;
+            margin-top: 20px;
+        }
+        .create-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .create-btn:hover {
+            background-color: #218838;
+        }
+        .delete-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 15px;
+            background-color: #f60000;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .delete-btn:hover {
+            background-color: #218838;
+        }
+        .edit-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    margin-top: 15px;
+    margin-left: 10px;
+    background-color: #ffc107;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+}
+.edit-btn:hover {
+    background-color: #e0a800;
+}
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Welcome to Mini Blog</h1>
+    </header>
+    <main>
+        <a href="/create" class="create-btn">Create New Post</a>
+        <% if(posts.length === 0){ %>
+            <div class="no-posts">No posts yet.</div>
+        <% } %>
+
+        <% posts.forEach((post,index) => { %>
+            <div class="post">
+                <h3><%= post.title %></h3>
+                <p><%= post.content %></p>
+             
+                <a class="edit-btn" href="/edit/<%= index %>">Edit</a>
+
+                <a class="delete-btn" href="/delete/<%=index%>">Delete</a>
+            </div>
+        <% }) %>
+    </main>
+</body>
+</html>
