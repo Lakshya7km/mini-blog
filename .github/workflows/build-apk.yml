@@ -22,19 +22,28 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Set up Node.js
+    - name: Set up Node.js 22
       uses: actions/setup-node@v4
       with:
         node-version: '22'
 
-    - name: Install all dependencies and build
+    - name: Install Android SDK Build Tools
+      run: |
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          "platform-tools" \
+          "platforms;android-35" \
+          "build-tools;35.0.0"
+
+    - name: Install Client Dependencies & Build
       run: |
         cd client
         npm install
         npm run build
+
+    - name: Setup Capacitor Android
+      run: |
+        cd client
         npm install @capacitor/android
         rm -rf android
         npx cap add android
@@ -43,7 +52,7 @@ jobs:
     - name: Build Debug APK
       run: |
         cd client/android
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
