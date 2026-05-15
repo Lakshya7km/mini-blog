@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import socket from '../../lib/socket'
 import { Search, MapPin, Building2, Navigation, Heart, Phone, Info, Megaphone, Bed, Droplet, Image as ImageIcon, Stethoscope, Clock, ShieldCheck, Activity, X } from 'lucide-react'
+import { requestLocationPermission } from '../../lib/permissions'
 
 import '../Home/Home.css' // Reuse the classic styling
 
@@ -30,7 +31,8 @@ export default function PublicPortal() {
         api.get('/hospitals').then(r => { setHospitals(r.data); setFiltered(r.data) }).finally(() => setLoading(false))
     }, [])
 
-    const requestLocation = () => {
+    const requestLocation = async () => {
+        await requestLocationPermission()
         navigator.geolocation?.getCurrentPosition(pos => {
             setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude })
         })

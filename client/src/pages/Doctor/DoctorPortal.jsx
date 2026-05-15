@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import { CheckCircle, ClipboardList, LogOut, MapPin, Save, Stethoscope, Upload, UserRound, AlertCircle, LayoutDashboard } from 'lucide-react'
+import { requestLocationPermission } from '../../lib/permissions'
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -70,6 +71,7 @@ export default function DoctorPortal() {
   const geoCheckin = async (type) => {
     setGeoLoading(true)
     setError('')
+    await requestLocationPermission();
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {

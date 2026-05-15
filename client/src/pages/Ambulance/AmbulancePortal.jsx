@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import socket from '../../lib/socket'
 import { Activity, Ambulance, LayoutDashboard, LogOut, Phone, PlusCircle, Radio, Truck } from 'lucide-react'
+import { requestLocationPermission } from '../../lib/permissions'
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +41,7 @@ export default function AmbulancePortal() {
   })
 
   useEffect(() => {
+    requestLocationPermission();
     Promise.all([api.get(`/ambulances/${ambulanceId}`), api.get(`/emergency?ambulanceId=${ambulanceId}`), api.get('/hospitals')])
       .then(([ambulanceRes, emergencyRes, hospitalRes]) => {
         setAmbulance(ambulanceRes.data)

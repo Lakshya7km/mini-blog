@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
+    "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
+    "@capacitor/geolocation": "^8.2.0",
     "axios": "^1.13.6",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
+import { requestCameraPermission } from '../lib/permissions'
 
 export default function QRScanner({ onScan }) {
   const ref = useRef()
@@ -19,6 +20,7 @@ export default function QRScanner({ onScan }) {
     ref.current.id = id
     let scanner = null
     let mounted = true
+    requestCameraPermission();
 
     const timer = setTimeout(() => {
       if (!mounted) return
