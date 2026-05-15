@@ -36,6 +36,7 @@ jobs:
         npm install
         npm run build
         npm install @capacitor/android
+        rm -rf android
         npx cap add android
         chmod +x android/gradlew
 
