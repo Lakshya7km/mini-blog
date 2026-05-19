@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { Search, MapPin, Building2, Navigation, Heart, Phone, Info, Megaphone, Bed, Droplet, Image as ImageIcon, Stethoscope, Clock, ShieldCheck, Activity, Store, Pill, X } from 'lucide-react';
-import { requestLocationPermission } from '../../lib/permissions';
 
 import '../Home/Home.css';
 
@@ -48,11 +47,11 @@ export default function PublicPortal() {
         }).finally(() => setLoading(false));
     }, []);
 
-    const requestLocation = async () => {
-        await requestLocationPermission();
-        navigator.geolocation?.getCurrentPosition(pos => {
-            setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        });
+    const requestLocation = () => {
+        navigator.geolocation.getCurrentPosition(
+            pos => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => {}
+        );
     };
 
     useEffect(() => {
@@ -254,9 +253,26 @@ export default function PublicPortal() {
                                             const counts = b?.counts;
                                             const hasCounts = counts && Object.keys(counts).length > 0;
                                             const vacantBeds = hasCounts ? Object.values(counts).reduce((a, c) => a + (c.available || 0), 0) : 0;
+                                            const docData = docSummary[id];
+                                            const availDocs = Array.isArray(docData) ? docData.filter(d => d.availability === 'Available').length : 0;
+                                            const totalDocs = Array.isArray(docData) ? docData.length : 0;
                                             return (
-                                                <div className={`alert ${vacantBeds > 0 ? 'alert-success' : (b ? 'alert-error' : 'alert-warning')}`} style={{ padding: '8px 12px', fontSize: '0.75rem', fontWeight: 700 }}>
-                                                    {vacantBeds > 0 ? `${vacantBeds} Beds Available` : (b ? 'All Beds Occupied' : 'Syncing Beds...')}
+                                                <div>
+                                                    <div className={`alert ${vacantBeds > 0 ? 'alert-success' : (b ? 'alert-error' : 'alert-warning')}`} style={{ padding: '8px 12px', fontSize: '0.75rem', fontWeight: 700, marginBottom: 8 }}>
+                                                        {vacantBeds > 0 ? `${vacantBeds} Bed${vacantBeds > 1 ? 's' : ''} Available` : (b ? 'All Beds Occupied' : 'Syncing Beds...')}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 8, fontSize: '0.75rem', color: 'var(--text2)' }}>
+                                                        {totalDocs > 0 && (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                <Stethoscope size={12} /> {availDocs}/{totalDocs} Doctors Available
+                                                            </span>
+                                                        )}
+                                                        {bloodStock[id]?.some(b => b.units > 0) && (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                <Droplet size={12} color="var(--danger)" /> Blood Bank
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })()}
@@ -300,31 +316,77 @@ export default function PublicPortal() {
 
             {selected && (
                 <div className="modal-overlay" onClick={() => setSelected(null)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
                         <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-                            <h3 className="modal-title" style={{ fontSize: '1.25rem' }}>{selected.name}</h3>
+                            <div>
+                                <h3 className="modal-title" style={{ fontSize: '1.25rem' }}>{selected.name}</h3>
+                                {selected.address?.city && <span style={{ fontSize: '0.85rem', color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={12} /> {selected.address.street ? `${selected.address.street}, ` : ''}{selected.address.city}{selected.address.district ? `, ${selected.address.district}` : ''}{selected.address.state ? `, ${selected.address.state}` : ''}</span>}
+                            </div>
                             <button className="btn btn-icon btn-ghost" onClick={() => setSelected(null)}><X size={20} /></button>
                         </div>
 
-                        <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: '10px', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                            <div>
-                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 4 }}><MapPin size={14} /> Address</strong>
-                                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text2)' }}>{selected.address?.street}, {selected.address?.city}</p>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="btn btn-primary btn-sm" onClick={() => navigateToLocation(selected.location, selected.name)}><Navigation size={14} /> Directions</button>
-                                {selected.type === 'hospital' && <button className="btn btn-danger btn-sm" onClick={() => setShowDonateForm(true)}><Heart size={14} /> Donate Blood</button>}
-                            </div>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
+                            <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => navigateToLocation(selected.location, selected.name)}><Navigation size={14} /> Directions</button>
+                            <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => window.location.href = `tel:${selected.contact}`}><Phone size={14} /> Call</button>
+                            {selected.type === 'hospital' && <button className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => setShowDonateForm(true)}><Heart size={14} /> Donate</button>}
                         </div>
 
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 4 }}><Phone size={14} /> Contact Information</strong>
-                            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text2)' }}>{selected.contact}</p>
-                        </div>
+                        {selected.type === 'hospital' && bedSummary[selected.hospitalId]?.counts && Object.keys(bedSummary[selected.hospitalId].counts).length > 0 && (
+                            <div style={{ background: 'var(--surface2)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1rem' }}>
+                                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 12 }}><Bed size={16} /> Bed Availability</strong>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12 }}>
+                                    {Object.entries(bedSummary[selected.hospitalId].counts).map(([type, stats]) => (
+                                        <div key={type} style={{ background: 'white', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border)' }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 4 }}>{type}</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: stats.available > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                                {stats.available} <span style={{ fontSize: '0.85rem', color: 'var(--text3)', fontWeight: 400 }}>/ {stats.total}</span>
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: stats.available > 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+                                                {stats.available > 0 ? 'Available' : 'Full'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {selected.type === 'hospital' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: '1rem' }}>
+                                {selected.services?.length > 0 && (
+                                    <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: 10 }}>
+                                        <strong style={{ fontSize: '0.75rem', color: 'var(--text3)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Services</strong>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                            {selected.services.map((s, i) => <span key={i} className="badge badge-blue" style={{ fontSize: '0.7rem' }}>{s}</span>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {selected.facilities?.length > 0 && (
+                                    <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: 10 }}>
+                                        <strong style={{ fontSize: '0.75rem', color: 'var(--text3)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Facilities</strong>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                            {selected.facilities.map((f, i) => <span key={i} className="badge badge-green" style={{ fontSize: '0.7rem' }}>{f}</span>)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {selected.type === 'hospital' && bloodStock[selected.hospitalId] && bloodStock[selected.hospitalId].some(b=>b.units>0) && (
+                            <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: '10px', marginBottom: '1rem' }}>
+                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 8 }}><Droplet size={14} color="var(--danger)" /> Blood Bank</strong>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {bloodStock[selected.hospitalId].filter(b => b.units > 0).map(b => (
+                                        <div key={b._id} className="badge badge-red" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                                            {b.bloodType}: {b.units}u
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {selected.type === 'clinic' && clinicServices[selected.clinicId] && clinicServices[selected.clinicId].filter(s => s.available).length > 0 && (
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 8 }}><Activity size={14} /> Clinical Services</strong>
+                            <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: '10px', marginBottom: '1rem' }}>
+                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 8 }}><Activity size={14} /> Services</strong>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                     {clinicServices[selected.clinicId].filter(s => s.available).map(s => <span key={s._id} className="badge badge-blue">{s.name}</span>)}
                                 </div>
@@ -332,58 +394,29 @@ export default function PublicPortal() {
                         )}
 
                         {selected.type === 'pharmacy' && pharmacyMeds[selected.pharmacyId] && pharmacyMeds[selected.pharmacyId].length > 0 && (
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 8 }}><Pill size={14} /> Available Medicines</strong>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-                                    {pharmacyMeds[selected.pharmacyId].map(m => (
-                                        <div key={m._id} style={{ border: '1px solid var(--border)', padding: 8, borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                                            {m.name} {m.requiresPrescription && <span style={{ color: '#ef4444', fontSize: '0.75rem' }}>(Rx)</span>}
-                                        </div>
+                            <div style={{ background: 'var(--surface2)', padding: '1rem', borderRadius: '10px', marginBottom: '1rem' }}>
+                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text)', marginBottom: 8 }}><Pill size={14} /> Medicines In Stock</strong>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {pharmacyMeds[selected.pharmacyId].slice(0, 10).map(m => (
+                                        <span key={m._id} className="badge badge-green">{m.name}{m.requiresPrescription ? ' (Rx)' : ''}</span>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {selected.type === 'hospital' && bedSummary[selected.hospitalId]?.counts && Object.keys(bedSummary[selected.hospitalId].counts).length > 0 && (
-                            <div style={{ background: 'var(--surface2)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1.5rem' }}>
-                                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 12 }}><Bed size={16} /> Bed Statistics</strong>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 16 }}>
-                                    {Object.entries(bedSummary[selected.hospitalId].counts).map(([type, stats]) => (
-                                        <div key={type}>
-                                            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: stats.available > 0 ? 'var(--success)' : 'var(--danger)' }}>{stats.available} <span style={{ fontSize: '0.9rem', color: 'var(--text3)' }}>/ {stats.total}</span></div>
-                                            <div style={{ fontSize: '0.8rem', color: 'var(--text2)', fontWeight: 500, marginTop: 2 }}>{type}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {selected.type === 'hospital' && bloodStock[selected.hospitalId] && bloodStock[selected.hospitalId].some(b=>b.units>0) && (
-                            <div style={{ background: 'var(--surface2)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1.5rem' }}>
-                                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 12 }}><Droplet size={16} color="var(--danger)" /> Blood Bank Inventory</strong>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                    {bloodStock[selected.hospitalId].filter(b => b.units > 0).map(b => (
-                                        <div key={b._id} className="badge badge-red" style={{ padding: '6px 12px', fontSize: '0.9rem' }}>
-                                            {b.bloodType}: {b.units} <span style={{ opacity: 0.8, marginLeft: 2, fontSize: '0.75rem' }}>u</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {(selected.type === 'hospital' || selected.type === 'clinic') && docSummary[selected.hospitalId || selected.clinicId] && docSummary[selected.hospitalId || selected.clinicId].length > 0 && (
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 12 }}><Stethoscope size={16} /> Medical Staff Directory</strong>
+                        {(selected.type === 'hospital' || selected.type === 'clinic') && docSummary[selected.hospitalId || selected.clinicId]?.length > 0 && (
+                            <div>
+                                <strong style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)', marginBottom: 8 }}><Stethoscope size={14} /> Doctors ({docSummary[selected.hospitalId || selected.clinicId].length})</strong>
                                 <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
                                     {docSummary[selected.hospitalId || selected.clinicId].map((d, i) => (
-                                        <div key={d._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < docSummary[selected.hospitalId || selected.clinicId].length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--surface)' }}>
-                                            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Stethoscope size={20} /></div>
+                                        <div key={d._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < docSummary[selected.hospitalId || selected.clinicId].length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14, fontWeight: 700 }}>{d.name?.[0]}</div>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 600, fontSize: '0.95rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ fontWeight: 600, fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     {d.name}
-                                                    <span className={`badge ${d.availability === 'Available' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '0.65rem' }}>{d.availability || 'Absent'}</span>
+                                                    <span className={`badge ${d.availability === 'Available' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '0.65rem' }}>{d.availability || 'Unavailable'}</span>
                                                 </div>
-                                                <span style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>{d.specialization || d.speciality || 'General Medicine'}</span>
+                                                <span style={{ color: 'var(--text2)', fontSize: '0.8rem' }}>{d.specialization || d.speciality || 'General'}</span>
                                             </div>
                                         </div>
                                     ))}

@@ -87,10 +87,11 @@ export default function AdminPortal() {
 
   const requestDeleteOtp = async (id) => {
     try {
-      await api.post('/admin/request-delete-otp', { col: dbCol, id });
+      const res = await api.post('/admin/request-delete-otp', { col: dbCol, id });
       setDeleteId(id);
       setOtpSent(true);
-      setMsg('OTP sent to your email.');
+      setOtpInput(res.data?.otp || '');
+      setMsg(res.data?.otp ? `OTP pre-filled` : 'OTP sent to your email.');
     } catch (err) {
       setMsg('Failed to send OTP.');
     }
@@ -121,9 +122,10 @@ export default function AdminPortal() {
   const sendEmailOtp = async () => {
     if (!newEmail.includes('@')) { setEmailSetupMsg('Enter a valid email'); return; }
     try {
-      await api.post('/admin/send-email-otp', { newEmail });
+      const res = await api.post('/admin/send-email-otp', { newEmail });
       setEmailOtpSent(true);
-      setEmailSetupMsg('OTP sent. Check your inbox (and spam).');
+      setEmailOtp(res.data?.otp || '');
+      setEmailSetupMsg(res.data?.otp ? 'OTP pre-filled. Click Verify Email.' : 'OTP sent. Check your inbox.');
     } catch (e) {
       setEmailSetupMsg(e.response?.data?.message || 'Failed to send OTP');
     }

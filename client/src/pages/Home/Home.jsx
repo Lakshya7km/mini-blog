@@ -3,12 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import {
-  Activity,
-  Ambulance,
-  Building2,
-  ShieldAlert,
-  Stethoscope,
-  Store,
+  Activity, Ambulance, Building2, ShieldAlert, Stethoscope, Store, Heart, Bed, Navigation, Droplet, Pill
 } from 'lucide-react';
 import './Home.css';
 
@@ -23,6 +18,21 @@ const ROLES = [
   { key: 'superadmin', label: 'Admin', icon: ShieldAlert, color: '#1E293B', userPlace: 'admin@rapidcare', route: '/admin' },
 ];
 
+const FEATURES = [
+  { icon: Bed, label: 'Real-time Bed Availability', desc: 'Live bed counts across all facilities' },
+  { icon: Stethoscope, label: 'Doctor Directory', desc: 'Specialist availability at a glance' },
+  { icon: Droplet, label: 'Blood Bank Inventory', desc: 'Type-wise blood stock tracking' },
+  { icon: Pill, label: 'Medicine Stock', desc: 'Check pharmacy inventory online' },
+  { icon: Ambulance, label: 'Ambulance Tracking', desc: 'Live GPS-based ambulance location' },
+  { icon: Navigation, label: 'GPS Nearby Search', desc: 'Find nearest hospitals using GPS' },
+];
+
+const DEVELOPERS = [
+  { name: 'Lakshya Mandavi', role: 'Full Stack Developer' },
+  { name: 'Ritu Raj Paikra', role: 'Backend Developer' },
+  { name: 'Siddhant Netam Dhruv', role: 'Frontend Developer' },
+];
+
 export default function Home() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -33,7 +43,6 @@ export default function Home() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -63,23 +72,51 @@ export default function Home() {
             <img src="/logo.png" alt="RapidCare" />
             <div>
               <div className="font-bold text-primary" style={{ fontSize: '1.15rem' }}>RapidCare</div>
-              <div className="text-muted" style={{ fontSize: 12 }}>Healthcare availability</div>
+              <div className="text-muted" style={{ fontSize: 12 }}>Healthcare availability platform</div>
             </div>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => navigate('/public')}>
-            Public directory
-          </button>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/public')}>
+              <Building2 size={15} /> Public directory
+            </button>
+          </div>
         </div>
       </nav>
 
       <section className="home-simple-hero">
         <div className="container home-simple-inner">
-          <h1>Staff sign in</h1>
-          <p className="text-muted">Choose your role, then enter your credentials.</p>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <h1 style={{ fontSize: '2rem', marginBottom: 8 }}>Staff sign in</h1>
+            <p className="text-muted" style={{ fontSize: 14, lineHeight: 1.6 }}>
+              RapidCare is a real-time healthcare ecosystem connecting hospitals, clinics, pharmacies, and emergency services. Choose your role below to access your dashboard.
+            </p>
+          </div>
 
           {redirectAfter && (
             <div className="alert alert-error" style={{ marginBottom: 16 }}>
               Sign in to continue to the bed you scanned.
+            </div>
+          )}
+
+          {!active && (
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Platform Features</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {FEATURES.map(f => {
+                  const Icon = f.icon;
+                  return (
+                    <div key={f.label} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'white', borderRadius: 10, border: '1px solid var(--border)', alignItems: 'center' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Icon size={15} color="var(--primary)" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{f.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)' }}>{f.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -149,10 +186,14 @@ export default function Home() {
 
       <footer className="classic-footer">
         <div className="container text-center">
-          <p className="text-muted" style={{ fontSize: 13 }}>© 2026 RapidCare</p>
+          <p className="text-muted" style={{ fontSize: 13, marginBottom: 12 }}>© 2026 RapidCare — Healthcare Ecosystem Management</p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, fontSize: 13, color: 'var(--text2)' }}>
+            {DEVELOPERS.map(d => (
+              <span key={d.name}><strong>{d.name}</strong> — {d.role}</span>
+            ))}
+          </div>
         </div>
       </footer>
     </div>
   );
 }
-
