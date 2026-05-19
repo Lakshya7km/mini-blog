@@ -15,6 +15,14 @@ const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
 const { sendOtpEmail } = require('../utils/mailer');
 const { success, error } = require('../utils/response');
 
+const pickAllowed = (body, allowed) => {
+    const picked = {};
+    for (const key of allowed) {
+        if (body[key] !== undefined) picked[key] = body[key];
+    }
+    return picked;
+};
+
 const COLLECTIONS = {
     hospitals: Hospital,
     pharmacies: Pharmacy,
