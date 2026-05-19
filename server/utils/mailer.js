@@ -38,8 +38,7 @@ const sendOtpEmail = async (to, otp) => {
         console.log(`OTP email sent to ${to}`);
         return true;
     } catch (error) {
-        console.error('Email sending failed:', error.message);
-        console.log('[OTP] Email failed — OTP is still valid via server console log above');
+        console.error('EMAIL ERROR:', error.message, error.code || '');
         return false;
     }
 };
