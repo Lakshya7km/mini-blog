@@ -87,11 +87,10 @@ export default function AdminPortal() {
 
   const requestDeleteOtp = async (id) => {
     try {
-      const res = await api.post('/admin/request-delete-otp', { col: dbCol, id });
+      await api.post('/admin/request-delete-otp', { col: dbCol, id });
       setDeleteId(id);
       setOtpSent(true);
-      setOtpInput(res.data?.otp || '');
-      setMsg(res.data?.otp ? `OTP: ${res.data.otp}` : 'OTP sent to your email.');
+      setMsg('OTP sent to your email.');
     } catch (err) {
       setMsg('Failed to send OTP.');
     }
@@ -119,15 +118,12 @@ export default function AdminPortal() {
     api.get(`/admin/master/${dbCol}`).then((res) => setDbData(res.data)).finally(() => setDbLoading(false));
   };
 
-  const [lastOtp, setLastOtp] = useState('');
-
   const sendEmailOtp = async () => {
     if (!newEmail.includes('@')) { setEmailSetupMsg('Enter a valid email'); return; }
     try {
-      const res = await api.post('/admin/send-email-otp', { newEmail });
+      await api.post('/admin/send-email-otp', { newEmail });
       setEmailOtpSent(true);
-      setEmailOtp(res.data?.otp || '');
-      setEmailSetupMsg(res.data?.otp ? 'OTP pre-filled below. Click Verify Email.' : 'OTP sent. Check your inbox (and spam).');
+      setEmailSetupMsg('OTP sent. Check your inbox (and spam).');
     } catch (e) {
       setEmailSetupMsg(e.response?.data?.message || 'Failed to send OTP');
     }

@@ -138,7 +138,7 @@ router.post('/send-email-otp', auth(['superadmin']), async (req, res) => {
         );
 
         sendOtpEmail(newEmail, otp).catch(() => {});
-        res.json({ message: 'OTP sent to the provided email', otp });
+        res.json({ message: 'OTP sent to the provided email' });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -200,7 +200,7 @@ router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
         );
 
         sendOtpEmail(email, otp).catch(() => {});
-        res.json({ message: 'OTP sent to superadmin email for deletion', otp });
+        res.json({ message: 'OTP sent to superadmin email for deletion' });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
