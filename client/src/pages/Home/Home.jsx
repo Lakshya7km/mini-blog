@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import {
-  Activity, Ambulance, Building2, ShieldAlert, Stethoscope, Store, Heart, Bed, Navigation, Droplet, Pill
+  Activity, Building2, ShieldAlert, Stethoscope, Store, Heart, Bed, Navigation, Droplet, Pill
 } from 'lucide-react';
 import './Home.css';
 
@@ -11,10 +11,10 @@ const ROLES = [
   { key: 'hospital', label: 'Reception', icon: Building2, color: '#1E3A8A', userPlace: 'HOSP-001', route: '/reception' },
   { key: 'doctor', label: 'Doctor', icon: Stethoscope, color: '#059669', userPlace: 'DOC-100', route: '/doctor' },
   { key: 'nurse', label: 'Nurse', icon: Activity, color: '#0284C7', userPlace: 'NUR-100', route: '/nurse' },
-  { key: 'ambulance', label: 'Ambulance', icon: Ambulance, color: '#DC2626', userPlace: 'AMB-001', route: '/ambulance' },
   { key: 'pharmacy', label: 'Pharmacy', icon: Store, color: '#f59e0b', userPlace: 'PHARM-001', route: '/pharmacy' },
   { key: 'clinic', label: 'Clinic', icon: Activity, color: '#8b5cf6', userPlace: 'CLINIC-001', route: '/clinic' },
   { key: 'diagnostic', label: 'Diagnostic', icon: Activity, color: '#0d9488', userPlace: 'DIAG-001', route: '/diagnostic-portal' },
+  { key: 'combined', label: 'Clinic+Diagnostic', icon: Activity, color: '#0891b2', userPlace: 'CLINIC-001', route: '/combined' },
   { key: 'superadmin', label: 'Admin', icon: ShieldAlert, color: '#1E293B', userPlace: 'admin@rapidcare', route: '/admin' },
 ];
 
@@ -23,7 +23,6 @@ const FEATURES = [
   { icon: Stethoscope, label: 'Doctor Directory', desc: 'Specialist availability at a glance' },
   { icon: Droplet, label: 'Blood Bank Inventory', desc: 'Type-wise blood stock tracking' },
   { icon: Pill, label: 'Medicine Stock', desc: 'Check pharmacy inventory online' },
-  { icon: Ambulance, label: 'Ambulance Tracking', desc: 'Live GPS-based ambulance location' },
   { icon: Navigation, label: 'GPS Nearby Search', desc: 'Find nearest hospitals using GPS' },
 ];
 

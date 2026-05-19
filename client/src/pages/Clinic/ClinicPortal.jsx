@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
-import socket from '../../lib/socket';
-import { Activity, LogOut, Stethoscope, PlusCircle, Trash2, MapPin, Calendar } from 'lucide-react';
-import AppointmentQueue from './AppointmentQueue';
+import { Activity, LogOut, Stethoscope, PlusCircle, Trash2, MapPin } from 'lucide-react';
 
 export default function ClinicPortal() {
   const { user, logout } = useAuth();
@@ -17,7 +15,6 @@ export default function ClinicPortal() {
   
   const [newService, setNewService] = useState({ name: '', description: '' });
   const [msg, setMsg] = useState('');
-  const [pendingAppts, setPendingAppts] = useState(0);
 
   const clinicId = user?.clinicId || user?.ref;
 
@@ -33,13 +30,6 @@ export default function ClinicPortal() {
       setDoctors(docRes.data);
     })
     .finally(() => setLoading(false));
-
-    api.get(`/clinic/${clinicId}/appointments?status=Pending`)
-      .then((r) => {
-        const rows = Array.isArray(r.data?.data) ? r.data.data : r.data;
-        setPendingAppts((rows || []).length);
-      })
-      .catch(() => setPendingAppts(0));
 
     socket.connect();
     socket.emit('join:clinic', clinicId);
@@ -116,13 +106,7 @@ export default function ClinicPortal() {
             <button className={`btn ${tab === 'doctors' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setTab('doctors')}>
               <Stethoscope size={16} /> Assigned Doctors
             </button>
-            <button className={`btn ${tab === 'appointments' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setTab('appointments')}>
-              <Calendar size={16} /> Appointments
-              {pendingAppts > 0 && <span className="badge badge-red" style={{ marginLeft: 6 }}>{pendingAppts}</span>}
-            </button>
           </div>
-
-          {tab === 'appointments' && <AppointmentQueue clinicId={clinicId} />}
 
           {tab === 'services' && (
             <div className="grid-2">

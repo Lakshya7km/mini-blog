@@ -37,6 +37,8 @@ const getModelAndFilter = (role, username) => {
             return { Model: Clinic, filter: { clinicId: username }, ref: 'clinicId' };
         case 'diagnostic':
             return { Model: DiagnosticCenter, filter: { diagnosticId: username }, ref: 'diagnosticId', selectPassword: true };
+        case 'combined':
+            return { Model: null, filter: null, ref: 'combinedId', combined: true };
         default:
             return null;
     }
@@ -46,6 +48,7 @@ const findUser = async (modelInfo) => {
     if (modelInfo.selectPassword) {
         return modelInfo.Model.findOne(modelInfo.filter).select('+password');
     }
+    if (modelInfo.combined) return null;
     return modelInfo.Model.findOne(modelInfo.filter);
 };
 
@@ -64,6 +67,26 @@ router.post('/login', authLimiter, async (req, res) => {
         const modelInfo = getModelAndFilter(role, username);
         if (!modelInfo) return res.status(400).json({ message: 'Invalid role' });
 
+        if (role === 'combined') {
+            const clinicUser = await Clinic.findOne({ clinicId: username });
+            const diagUser = await DiagnosticCenter.findOne({ diagnosticId: username }).select('+password');
+            if (!clinicUser || !diagUser) return res.status(404).json({ message: 'Combined facility not found. Register both clinic and diagnostic first.' });
+            const ok = await clinicUser.comparePassword(password);
+            if (!ok) return res.status(401).json({ message: 'Invalid password' });
+
+            const payload = { role: 'combined', id: clinicUser._id, ref: username, clinicId: username, diagnosticId: username };
+            const token = sign(payload);
+            return res.json({
+                token,
+                user: {
+                    id: clinicUser._id, role: 'combined', username,
+                    clinicId: username, diagnosticId: username,
+                    name: clinicUser.name, email: clinicUser.email,
+                },
+                forcePasswordChange: !!clinicUser.forcePasswordChange,
+            });
+        }
+
         const user = await findUser(modelInfo);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -74,6 +97,7 @@ router.post('/login', authLimiter, async (req, res) => {
         if (user.hospitalId) payload.hospitalId = user.hospitalId;
         if (user.clinicId) payload.clinicId = user.clinicId;
         if (role === 'hospital') payload.hospitalId = user.hospitalId || username;
+        if (role === 'doctor') payload.doctorId = user.doctorId;
         if (role === 'diagnostic') payload.diagnosticId = user.diagnosticId;
 
         const token = sign(payload);
@@ -83,6 +107,7 @@ router.post('/login', authLimiter, async (req, res) => {
             username,
             hospitalId: payload.hospitalId,
             clinicId: payload.clinicId,
+            doctorId: payload.doctorId,
             diagnosticId: payload.diagnosticId,
             name: user.name,
             email: user.email,

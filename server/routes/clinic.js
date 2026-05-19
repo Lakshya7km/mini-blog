@@ -81,7 +81,7 @@ router.get('/:clinicId', async (req, res) => {
 const CLINIC_ALLOWED = ['name', 'contact', 'email', 'address', 'location', 'clinicType', 'gallery'];
 
 // Update profile
-router.put('/:clinicId', auth(['clinic']), async (req, res) => {
+router.put('/:clinicId', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const updates = pickAllowed(req.body, CLINIC_ALLOWED);
@@ -113,7 +113,7 @@ router.post('/:clinicId/appointment', async (req, res) => {
     }
 });
 
-router.get('/:clinicId/appointments', auth(['clinic']), async (req, res) => {
+router.get('/:clinicId/appointments', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return error(res, 'Forbidden', 'FORBIDDEN', 403);
         const q = { clinicId: req.params.clinicId };
@@ -125,7 +125,7 @@ router.get('/:clinicId/appointments', auth(['clinic']), async (req, res) => {
     }
 });
 
-router.put('/:clinicId/appointments/:requestId', auth(['clinic']), async (req, res) => {
+router.put('/:clinicId/appointments/:requestId', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return error(res, 'Forbidden', 'FORBIDDEN', 403);
         if (!mongoose.Types.ObjectId.isValid(req.params.requestId)) return error(res, 'Invalid request ID', 'VALIDATION', 400);
@@ -142,7 +142,7 @@ router.put('/:clinicId/appointments/:requestId', auth(['clinic']), async (req, r
 });
 
 // Internal stats
-router.get('/:clinicId/stats', auth(['clinic']), async (req, res) => {
+router.get('/:clinicId/stats', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const [doctors, services, announcements] = await Promise.all([
@@ -162,7 +162,7 @@ router.get('/:clinicId/stats', auth(['clinic']), async (req, res) => {
 });
 
 // Gallery upload
-router.post('/:clinicId/gallery', auth(['clinic']), upload.array('images', 10), async (req, res) => {
+router.post('/:clinicId/gallery', auth(['clinic', 'combined']), upload.array('images', 10), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const urls = req.files.map(f => `/uploads/clinic/${f.filename}`);
@@ -176,7 +176,7 @@ router.post('/:clinicId/gallery', auth(['clinic']), upload.array('images', 10), 
 });
 
 // Gallery delete
-router.delete('/:clinicId/gallery', auth(['clinic']), async (req, res) => {
+router.delete('/:clinicId/gallery', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const { imageUrl } = req.body;
@@ -197,7 +197,7 @@ router.get('/:clinicId/services', async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-router.post('/:clinicId/services', auth(['clinic']), async (req, res) => {
+router.post('/:clinicId/services', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const s = new ClinicService({ ...pickAllowed(req.body, ['name', 'description', 'available']), clinicId: req.params.clinicId });
@@ -206,7 +206,7 @@ router.post('/:clinicId/services', auth(['clinic']), async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-router.put('/:clinicId/services/:serviceId', auth(['clinic']), async (req, res) => {
+router.put('/:clinicId/services/:serviceId', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const s = await ClinicService.findOneAndUpdate(
@@ -218,7 +218,7 @@ router.put('/:clinicId/services/:serviceId', auth(['clinic']), async (req, res) 
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-router.delete('/:clinicId/services/:serviceId', auth(['clinic']), async (req, res) => {
+router.delete('/:clinicId/services/:serviceId', auth(['clinic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         await ClinicService.deleteOne({ _id: req.params.serviceId, clinicId: req.params.clinicId });

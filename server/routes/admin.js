@@ -184,58 +184,27 @@ router.post('/verify-email-otp', auth(['superadmin']), async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
+router.post('/register-combined', auth(['superadmin']), async (req, res) => {
     try {
-        const { col, id } = req.body;
-        const Model = COLLECTIONS[col];
-        if (!Model) return error(res, 'Collection not found', 'NOT_FOUND', 404);
-        if (!mongoose.Types.ObjectId.isValid(id)) return error(res, 'Invalid ID', 'VALIDATION', 400);
+        const { combinedId, password, name, contact, email, address } = req.body;
+        if (!combinedId || !password) return error(res, 'combinedId and password required', 'VALIDATION', 400);
+        if (await Clinic.findOne({ clinicId: combinedId })) return error(res, 'Combined ID already exists (clinic)', 'DUPLICATE', 400);
+        if (await DiagnosticCenter.findOne({ diagnosticId: combinedId })) return error(res, 'Combined ID already exists (diagnostic)', 'DUPLICATE', 400);
 
-        const doc = await Model.findById(id);
-        if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
+        await new Clinic({ clinicId: combinedId, password, name, contact, email, address }).save();
+        await new DiagnosticCenter({ diagnosticId: combinedId, password, name, contact, email, address }).save();
 
-        const admin = await SuperAdmin.findById(req.user.id);
-        const email = admin.email || process.env.EMAIL_USER;
-        if (!email) return error(res, 'Superadmin email not configured', 'CONFIG', 500);
-
-        const otp = generateOtp();
-        const hashedOtp = await hashOtp(otp);
-
-        await OtpToken.findOneAndUpdate(
-            { email, purpose: 'master-delete' },
-            { otpHash: hashedOtp, attempts: 0, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
-            { upsert: true, new: true }
-        );
-
-        sendOtpEmail(email, otp).catch(() => {});
-        res.json({ message: 'OTP sent to superadmin email for deletion', otp });
+        cache.delByPrefix('clinic:list');
+        cache.delByPrefix('diagnostic:list');
+        res.json({ message: 'Combined clinic & diagnostic registered', id: combinedId, name });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 router.delete('/master/:col/:id', auth(['superadmin']), async (req, res) => {
     try {
-        const { otp, confirmation } = req.body;
+        const { confirmation } = req.body;
         if (confirmation !== 'DELETE') {
             return error(res, 'Send confirmation: "DELETE"', 'VALIDATION', 400);
-        }
-
-        const admin = await SuperAdmin.findById(req.user.id);
-        const email = admin.email || process.env.EMAIL_USER;
-
-        const tokenDoc = await OtpToken.findOne({ email, purpose: 'master-delete' }).sort({ createdAt: -1 });
-        if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
-            return res.status(400).json({ message: 'Invalid or expired OTP' });
-        }
-
-        const isValid = await verifyOtp(otp, tokenDoc.otpHash);
-        if (!isValid) {
-            tokenDoc.attempts = (tokenDoc.attempts || 0) + 1;
-            await tokenDoc.save();
-            if (tokenDoc.attempts >= 5) {
-                await OtpToken.deleteOne({ _id: tokenDoc._id });
-                return error(res, 'Too many failed attempts. Request a new OTP.', 'OTP_LOCKED', 400);
-            }
-            return res.status(400).json({ message: 'Invalid OTP' });
         }
 
         const Model = COLLECTIONS[req.params.col];
@@ -246,10 +215,9 @@ router.delete('/master/:col/:id', auth(['superadmin']), async (req, res) => {
         if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
 
         await Model.findByIdAndDelete(req.params.id);
-        await OtpToken.deleteOne({ _id: tokenDoc._id });
 
         cache.delByPrefix(cacheColKey(req.params.col));
-        const idField = doc.hospitalId || doc.pharmacyId || doc.clinicId || doc.diagnosticId || doc.doctorId || doc.nurseId || doc.ambulanceId;
+        const idField = doc.hospitalId || doc.pharmacyId || doc.clinicId || doc.diagnosticId || doc.doctorId || doc.nurseId;
         if (idField) cache.del(`${req.params.col.replace(/s$/, '')}:${idField}`);
 
         res.json({ message: 'Deleted' });

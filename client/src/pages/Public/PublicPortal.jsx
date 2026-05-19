@@ -62,10 +62,35 @@ export default function PublicPortal() {
 
         let f = baseList;
         if (search) {
-            f = f.filter(item => 
-                item.name?.toLowerCase().includes(search.toLowerCase()) || 
-                item.address?.city?.toLowerCase().includes(search.toLowerCase())
-            );
+            const q = search.toLowerCase();
+            f = f.filter(item => {
+                if (item.name?.toLowerCase().includes(q)) return true;
+                if (item.address?.city?.toLowerCase().includes(q)) return true;
+                if (item.hospitalId?.toLowerCase().includes(q)) return true;
+                if (item.clinicId?.toLowerCase().includes(q)) return true;
+                if (item.pharmacyId?.toLowerCase().includes(q)) return true;
+
+                if (viewType === 'hospital') {
+                    if ((item.services || []).some(s => s.toLowerCase().includes(q))) return true;
+                    if ((item.facilities || []).some(f => f.toLowerCase().includes(q))) return true;
+                    if ((item.insurance || []).some(i => i.toLowerCase().includes(q))) return true;
+                    if (item.clinicType?.toLowerCase().includes(q)) return true;
+                }
+
+                if (viewType === 'clinic') {
+                    if (item.clinicType?.toLowerCase().includes(q)) return true;
+                    const svcs = clinicServices[item.clinicId] || [];
+                    if (svcs.some(s => s.name?.toLowerCase().includes(q))) return true;
+                }
+
+                if (viewType === 'pharmacy') {
+                    if (item.licenseNumber?.toLowerCase().includes(q)) return true;
+                    const meds = pharmacyMeds[item.pharmacyId] || [];
+                    if (meds.some(m => m.name?.toLowerCase().includes(q))) return true;
+                }
+
+                return false;
+            });
         }
 
         if (userPos) {
@@ -226,6 +251,9 @@ export default function PublicPortal() {
                         </button>
                         <button type="button" className="btn btn-outline" onClick={() => navigate('/diagnostic')}>
                             <Activity size={16} /> Diagnostics
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => navigate('/medicines')}>
+                            <Pill size={16} /> Medicines
                         </button>
                     </div>
 

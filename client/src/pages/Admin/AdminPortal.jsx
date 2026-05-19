@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
-import { Building2, Database, LayoutDashboard, LogOut, Plus, RefreshCw, ShieldCheck, Trash2, KeyRound } from 'lucide-react';
+import { Building2, Database, LayoutDashboard, LogOut, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 
 const TABS = [
   { key: 'dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -10,7 +10,7 @@ const TABS = [
   { key: 'master', label: 'Master Data', icon: Database },
 ];
 
-const COLS = ['hospitals', 'pharmacies', 'clinics', 'diagnostics', 'doctors', 'nurses', 'ambulances'];
+const COLS = ['hospitals', 'pharmacies', 'clinics', 'diagnostics', 'doctors', 'nurses'];
 
 export default function AdminPortal() {
   const { user, logout, updateUser } = useAuth();
@@ -28,8 +28,6 @@ export default function AdminPortal() {
 
   // Delete modal state
   const [deleteId, setDeleteId] = useState(null);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
   const [confirmInput, setConfirmInput] = useState('');
 
   // Email setup state
@@ -71,6 +69,9 @@ export default function AdminPortal() {
       } else if (regType === 'diagnostic') {
         payload.diagnosticId = regForm.id;
         endpoint = '/admin/register-diagnostic';
+      } else if (regType === 'combined') {
+        payload.combinedId = regForm.id;
+        endpoint = '/admin/register-combined';
       }
 
       await api.post(endpoint, payload);
@@ -85,27 +86,13 @@ export default function AdminPortal() {
     }
   };
 
-  const requestDeleteOtp = async (id) => {
-    try {
-      const res = await api.post('/admin/request-delete-otp', { col: dbCol, id });
-      setDeleteId(id);
-      setOtpSent(true);
-      setOtpInput(res.data?.otp || '');
-      setMsg(res.data?.otp ? `OTP pre-filled` : 'OTP sent to your email.');
-    } catch (err) {
-      setMsg('Failed to send OTP.');
-    }
-  };
-
   const confirmDelete = async () => {
     try {
       await api.delete(`/admin/master/${dbCol}/${deleteId}`, {
-        data: { otp: otpInput, confirmation: confirmInput }
+        data: { confirmation: confirmInput }
       });
       setDbData((prev) => prev.filter((entry) => entry._id !== deleteId));
       setDeleteId(null);
-      setOtpSent(false);
-      setOtpInput('');
       setConfirmInput('');
       setMsg('Record deleted successfully.');
       setTimeout(() => setMsg(''), 3000);
@@ -242,17 +229,13 @@ export default function AdminPortal() {
                 <div className="stat-val">{stats.doctors}</div>
                 <div className="stat-label">Doctors</div>
               </div>
-              <div className="stat-card" style={{ '--accent': '#f59e0b' }}>
-                <div className="stat-val">{stats.ambulances}</div>
-                <div className="stat-label">Ambulances</div>
-              </div>
             </div>
           )}
 
           {tab === 'register' && (
             <div className="card">
               <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-                {['hospital', 'pharmacy', 'clinic', 'diagnostic'].map(type => (
+                {['hospital', 'pharmacy', 'clinic', 'diagnostic', 'combined'].map(type => (
                   <button 
                     key={type} 
                     className={`btn ${regType === type ? 'btn-primary' : 'btn-outline'}`}
@@ -320,7 +303,7 @@ export default function AdminPortal() {
                             </div>
                           ))}
                         </div>
-                        <button className="btn btn-ghost btn-icon" onClick={() => requestDeleteOtp(row._id)}>
+                        <button className="btn btn-ghost btn-icon" onClick={() => { setDeleteId(row._id); setConfirmInput(''); }}>
                           <Trash2 size={15} color="var(--danger)" />
                         </button>
                       </div>
@@ -333,26 +316,22 @@ export default function AdminPortal() {
         </div>
       </main>
 
-      {otpSent && (
-        <div className="modal-overlay" onClick={() => { setOtpSent(false); setDeleteId(null); }}>
+      {deleteId && (
+        <div className="modal-overlay" onClick={() => { setDeleteId(null); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">Master Delete Authorization</span>
             </div>
-            <p className="text-muted" style={{ marginBottom: 16 }}>An OTP has been sent to your admin email. Please enter it below along with the confirmation word "DELETE".</p>
+            <p className="text-muted" style={{ marginBottom: 16 }}>Type <strong>DELETE</strong> below to permanently remove this record.</p>
             
-            <div className="form-group">
-              <label className="form-label"><KeyRound size={14} style={{ display: 'inline', marginRight: 4 }} /> 6-Digit OTP</label>
-              <input className="form-input" value={otpInput} onChange={e => setOtpInput(e.target.value)} />
-            </div>
             <div className="form-group">
               <label className="form-label">Type 'DELETE' to confirm</label>
               <input className="form-input" value={confirmInput} onChange={e => setConfirmInput(e.target.value)} placeholder="DELETE" />
             </div>
             
             <div className="grid-2">
-              <button className="btn btn-ghost" onClick={() => { setOtpSent(false); setDeleteId(null); }}>Cancel</button>
-              <button className="btn btn-danger" onClick={confirmDelete} disabled={confirmInput !== 'DELETE' || otpInput.length !== 6}>
+              <button className="btn btn-ghost" onClick={() => { setDeleteId(null); }}>Cancel</button>
+              <button className="btn btn-danger" onClick={confirmDelete} disabled={confirmInput !== 'DELETE'}>
                 Permanently Delete
               </button>
             </div>

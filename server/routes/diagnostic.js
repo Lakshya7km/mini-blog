@@ -60,7 +60,7 @@ router.get('/:diagnosticId', async (req, res) => {
 
 const DIAGNOSTIC_ALLOWED = ['name', 'contact', 'email', 'address', 'specialties', 'openingHours', 'isActive'];
 
-router.put('/:diagnosticId', auth(['diagnostic']), async (req, res) => {
+router.put('/:diagnosticId', auth(['diagnostic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.diagnosticId) {
             return error(res, 'Forbidden', 'FORBIDDEN', 403);
@@ -79,7 +79,7 @@ router.put('/:diagnosticId', auth(['diagnostic']), async (req, res) => {
     }
 });
 
-router.post('/:diagnosticId/imageUrls', auth(['diagnostic']), async (req, res) => {
+router.post('/:diagnosticId/imageUrls', auth(['diagnostic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.diagnosticId) {
             return error(res, 'Forbidden', 'FORBIDDEN', 403);
@@ -104,7 +104,7 @@ router.post('/:diagnosticId/imageUrls', auth(['diagnostic']), async (req, res) =
     }
 });
 
-router.delete('/:diagnosticId/imageUrls', auth(['diagnostic']), async (req, res) => {
+router.delete('/:diagnosticId/imageUrls', auth(['diagnostic', 'combined']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.diagnosticId) {
             return error(res, 'Forbidden', 'FORBIDDEN', 403);
