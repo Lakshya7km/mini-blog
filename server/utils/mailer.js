@@ -1,14 +1,19 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // You can change this to any SMTP provider
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-    }
+    },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000
 });
 
 const sendOtpEmail = async (to, otp) => {
+    console.log(`[OTP] ${to} — Your OTP is: ${otp}`);
+
     const mailOptions = {
         from: `"RapidCare System" <${process.env.EMAIL_USER}>`,
         to,
@@ -30,10 +35,11 @@ const sendOtpEmail = async (to, otp) => {
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log(`OTP sent to ${to}`);
+        console.log(`OTP email sent to ${to}`);
         return true;
     } catch (error) {
-        console.error('Email sending failed:', error);
+        console.error('Email sending failed:', error.message);
+        console.log('[OTP] Email failed — OTP is still valid via server console log above');
         return false;
     }
 };

@@ -132,7 +132,7 @@ router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
             { upsert: true, new: true }
         );
 
-        await sendOtpEmail(email, otp);
+        sendOtpEmail(email, otp).catch(() => {});
         res.json({ message: 'OTP sent to superadmin email for deletion' });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });

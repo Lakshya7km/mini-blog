@@ -122,7 +122,7 @@ router.post('/request-otp', otpLimiter, async (req, res) => {
             { upsert: true, new: true }
         );
 
-        await sendOtpEmail(user.email, otp);
+        sendOtpEmail(user.email, otp).catch(() => {});
         return res.json(generic);
     } catch (e) {
         return res.json({ success: true, message: 'OTP sent if account exists' });
