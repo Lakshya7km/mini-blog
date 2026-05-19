@@ -110,6 +110,65 @@ router.get('/master/:col', auth(['superadmin']), async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+const isValidEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+router.post('/send-email-otp', auth(['superadmin']), async (req, res) => {
+    try {
+        const { newEmail } = req.body;
+        if (!isValidEmail(newEmail)) return error(res, 'Invalid email format', 'VALIDATION', 400);
+
+        const admin = await SuperAdmin.findById(req.user.id);
+        admin.pendingEmail = newEmail;
+        await admin.save();
+
+        const otp = generateOtp();
+        const hashedOtp = await hashOtp(otp);
+
+        await OtpToken.findOneAndUpdate(
+            { email: newEmail, purpose: 'email-verify' },
+            { otpHash: hashedOtp, attempts: 0, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
+            { upsert: true, new: true }
+        );
+
+        sendOtpEmail(newEmail, otp).catch(() => {});
+        res.json({ message: 'OTP sent to the provided email' });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/verify-email-otp', auth(['superadmin']), async (req, res) => {
+    try {
+        const { otp } = req.body;
+
+        const admin = await SuperAdmin.findById(req.user.id);
+        if (!admin.pendingEmail) return error(res, 'No pending email verification', 'VALIDATION', 400);
+
+        const tokenDoc = await OtpToken.findOne({ email: admin.pendingEmail, purpose: 'email-verify' });
+        if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
+            if (tokenDoc) await OtpToken.deleteOne({ _id: tokenDoc._id });
+            return error(res, 'OTP expired. Request a new one.', 'OTP_EXPIRED', 400);
+        }
+
+        const isValid = await verifyOtp(otp, tokenDoc.otpHash);
+        if (!isValid) {
+            tokenDoc.attempts = (tokenDoc.attempts || 0) + 1;
+            await tokenDoc.save();
+            if (tokenDoc.attempts >= 5) {
+                await OtpToken.deleteOne({ _id: tokenDoc._id });
+                return error(res, 'Too many failed attempts. Request a new OTP.', 'OTP_LOCKED', 400);
+            }
+            return error(res, 'Invalid OTP', 'OTP_INVALID', 400);
+        }
+
+        admin.email = admin.pendingEmail;
+        admin.emailVerified = true;
+        admin.pendingEmail = undefined;
+        await admin.save();
+        await OtpToken.deleteOne({ _id: tokenDoc._id });
+
+        res.json({ email: admin.email, emailVerified: true });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
     try {
         const { col, id } = req.body;

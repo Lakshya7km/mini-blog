@@ -86,6 +86,7 @@ router.post('/login', authLimiter, async (req, res) => {
             diagnosticId: payload.diagnosticId,
             name: user.name,
             email: user.email,
+            emailVerified: user.emailVerified,
         };
 
         if (role === 'ambulance') {

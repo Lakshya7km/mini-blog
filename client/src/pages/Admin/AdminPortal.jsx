@@ -13,7 +13,7 @@ const TABS = [
 const COLS = ['hospitals', 'pharmacies', 'clinics', 'diagnostics', 'doctors', 'nurses', 'ambulances'];
 
 export default function AdminPortal() {
-  const { logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('dashboard');
   const [stats, setStats] = useState(null);
@@ -31,6 +31,13 @@ export default function AdminPortal() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [confirmInput, setConfirmInput] = useState('');
+
+  // Email setup state
+  const [newEmail, setNewEmail] = useState('');
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailOtp, setEmailOtp] = useState('');
+  const [emailSetupMsg, setEmailSetupMsg] = useState('');
+  const [emailVerifying, setEmailVerifying] = useState(false);
 
   useEffect(() => {
     api.get('/admin/stats').then((res) => setStats(res.data)).finally(() => setLoading(false));
@@ -111,7 +118,74 @@ export default function AdminPortal() {
     api.get(`/admin/master/${dbCol}`).then((res) => setDbData(res.data)).finally(() => setDbLoading(false));
   };
 
+  const sendEmailOtp = async () => {
+    if (!newEmail.includes('@')) { setEmailSetupMsg('Enter a valid email'); return; }
+    try {
+      await api.post('/admin/send-email-otp', { newEmail });
+      setEmailOtpSent(true);
+      setEmailSetupMsg('OTP sent. Check your inbox (and spam).');
+    } catch (e) {
+      setEmailSetupMsg(e.response?.data?.message || 'Failed to send OTP');
+    }
+  };
+
+  const verifyEmailOtp = async () => {
+    setEmailVerifying(true);
+    try {
+      const res = await api.post('/admin/verify-email-otp', { otp: emailOtp });
+      updateUser({ email: res.data.email, emailVerified: true });
+      setEmailSetupMsg('');
+    } catch (e) {
+      setEmailSetupMsg(e.response?.data?.message || 'Verification failed');
+    } finally {
+      setEmailVerifying(false);
+    }
+  };
+
   if (loading) return <div className="loader-center"><div className="spinner" /></div>;
+
+  if (!user?.emailVerified) {
+    return (
+      <div className="portal-shell">
+        <div className="modal-overlay" style={{ position: 'fixed', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '90%' }}>
+            <div className="modal-header"><span className="modal-title">Set Up Your Admin Email</span></div>
+
+            {!emailOtpSent ? (
+              <>
+                <p className="text-muted" style={{ marginBottom: 16 }}>
+                  Your account needs a verified email for OTP-based operations (delete, password change, etc.).
+                </p>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input className="form-input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="you@example.com" />
+                </div>
+                <button className="btn btn-primary btn-full" onClick={sendEmailOtp}>
+                  Send Verification OTP
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-muted" style={{ marginBottom: 16 }}>
+                  An OTP was sent to <strong>{newEmail}</strong>. Enter it below.
+                </p>
+                <div className="form-group">
+                  <label className="form-label">6-Digit OTP</label>
+                  <input className="form-input" value={emailOtp} onChange={e => setEmailOtp(e.target.value)} placeholder="123456" />
+                </div>
+                <button className="btn btn-primary btn-full" onClick={verifyEmailOtp} disabled={emailOtp.length !== 6 || emailVerifying}>
+                  {emailVerifying ? 'Verifying...' : 'Verify Email'}
+                </button>
+              </>
+            )}
+
+            {emailSetupMsg && <div className="alert alert-error" style={{ marginTop: 12 }}>{emailSetupMsg}</div>}
+          </div>
+        </div>
+        <style>{`@media(min-width:768px){#admin-tab-nav{display:flex!important;gap:6px;}}`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="portal-shell">

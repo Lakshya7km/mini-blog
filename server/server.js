@@ -114,7 +114,7 @@ async function ensureSuperAdmin() {
 
     let admin = await SuperAdmin.findOne({ username: fixedUsername });
     if (!admin) {
-        admin = new SuperAdmin({ username: fixedUsername, password: fixedPassword, email: fixedEmail });
+        admin = new SuperAdmin({ username: fixedUsername, password: fixedPassword, email: fixedEmail, emailVerified: false });
         await admin.save();
         logger.info(`Superadmin created: ${fixedUsername} with email ${fixedEmail}`);
         return;
@@ -122,6 +122,7 @@ async function ensureSuperAdmin() {
 
     if (!admin.email) {
         admin.email = fixedEmail;
+        admin.emailVerified = false;
         await admin.save();
         logger.info(`Superadmin email updated: ${fixedEmail}`);
     }
