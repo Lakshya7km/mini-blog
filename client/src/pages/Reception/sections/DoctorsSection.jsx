@@ -1,32 +1,44 @@
 import { useState, useEffect } from 'react'
 import api from '../../../lib/api'
+import socket from '../../../lib/socket'
+import { joinHospital } from '../../../lib/socketRooms'
 import { Plus, X } from 'lucide-react'
 
 export default function DoctorsSection({ hospitalId }) {
     const [docs, setDocs] = useState([])
     const [loading, setLoading] = useState(true)
     const [adding, setAdding] = useState(false)
-    const [form, setForm] = useState({ doctorId: '', name: '', speciality: '', qualification: '', experience: '', password: '' })
+    const [form, setForm] = useState({ doctorId: '', name: '', specialization: '', password: '', contact: '', email: '' })
     const [msg, setMsg] = useState('')
 
     const AVAIL_COLOR = { Available: '#22c55e', Unavailable: '#ef4444', 'On Leave': '#f59e0b' }
 
     const load = () => api.get(`/doctors?hospitalId=${hospitalId}`).then(r => setDocs(r.data)).finally(() => setLoading(false))
-    useEffect(() => { load() }, [hospitalId])
+    useEffect(() => {
+        load()
+        socket.connect()
+        joinHospital(hospitalId)
+        const onAvail = ({ doctorId, availability }) => {
+            setDocs(prev => prev.map(d => d.doctorId === doctorId ? { ...d, availability } : d))
+        }
+        socket.on('doctor:availability', onAvail)
+        return () => socket.off('doctor:availability', onAvail)
+    }, [hospitalId])
 
     const create = async () => {
         try {
             await api.post('/doctors', { ...form, hospitalId })
             setAdding(false); load(); setMsg('Doctor registered!')
-            setForm({ doctorId: '', name: '', speciality: '', qualification: '', experience: '', password: '' })
+            setForm({ doctorId: '', name: '', specialization: '', password: '', contact: '', email: '' })
         } catch (err) { alert(err.response?.data?.message || 'Failed to register doctor') }
     }
 
     const toggleAvailability = async (doc, forceStatus) => {
         try {
-            const next = forceStatus || (doc.availability === 'Available' ? 'Unavailable' : 'Available')
-            await api.post(`/doctors/attendance-override`, { doctorId: doc.doctorId, hospitalId, availability: next === 'Available' ? 'Present' : 'Absent' })
-            load() // Refresh to get latest 'lastUpdated' from backend
+            const status = forceStatus === 'Available' ? 'Present' : 'Absent'
+            const today = new Date().toISOString().slice(0, 10)
+            await api.post('/attendance/override', { doctorId: doc.doctorId, date: today, status })
+            load()
         } catch (err) { alert(err.response?.data?.message || 'Failed to update availability') }
     }
 
@@ -52,14 +64,14 @@ export default function DoctorsSection({ hospitalId }) {
             {docs.map(d => (
                 <div key={d._id} className="card" style={{ marginBottom: 10 }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        {d.photoUrl
-                            ? <img src={d.photoUrl} alt={d.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+                        {d.photo
+                            ? <img src={d.photo.startsWith('http') ? d.photo : `${import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || ''}${d.photo}`} alt={d.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
                             : <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 700, fontSize: 18 }}>{d.name[0]}</div>
                         }
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600 }}>{d.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{d.doctorId} · {d.speciality}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text3)' }}>{d.qualification} · {d.experience}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{d.doctorId} · {d.specialization || 'General'}</div>
+                            {d.contact && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{d.contact} · {d.email}</div>}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
                             <div style={{ display: 'flex', gap: 6 }}>
@@ -87,7 +99,7 @@ export default function DoctorsSection({ hospitalId }) {
                             <span className="modal-title">Register Doctor</span>
                             <button className="btn btn-ghost btn-icon" onClick={() => setAdding(false)}><X size={18} /></button>
                         </div>
-                        {[{ k: 'doctorId', l: 'Doctor ID' }, { k: 'name', l: 'Full Name' }, { k: 'speciality', l: 'Speciality' }, { k: 'qualification', l: 'Qualification' }, { k: 'experience', l: 'Experience' }, { k: 'password', l: 'Login Password' }].map(f => (
+                        {[{ k: 'doctorId', l: 'Doctor ID' }, { k: 'name', l: 'Full Name' }, { k: 'specialization', l: 'Specialization' }, { k: 'contact', l: 'Contact' }, { k: 'email', l: 'Email' }, { k: 'password', l: 'Login Password' }].map(f => (
                             <div className="form-group" key={f.k}>
                                 <label className="form-label">{f.l}</label>
                                 <input className="form-input" value={form[f.k]} onChange={e => setForm(p => ({ ...p, [f.k]: e.target.value }))} />

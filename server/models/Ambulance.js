@@ -2,19 +2,21 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
 const ambulanceSchema = new mongoose.Schema({
-    ambulanceId: { type: String, required: true, unique: true, trim: true },
-    hospitalId: { type: String, required: true },
+    ambulanceId:   { type: String, required: true, unique: true, trim: true },
     vehicleNumber: { type: String, required: true },
-    ambulanceNumber: String,
-    password: { type: String, required: true },
-    status: { type: String, default: 'Offline', enum: ['On Duty', 'Offline', 'In Transit'] },
-    location: { lat: Number, lng: Number, updatedAt: Date },
-    emt: { name: String, emtId: String, mobile: String },
-    pilot: { name: String, pilotId: String, mobile: String },
-    assignedTask: String, // Dynamic task assigned by reception
+    password:      { type: String, required: true },
+    driverName:    { type: String },
+    contact:       { type: String },
+    hospitalId:    { type: String },
+    status:        { type: String, enum: ['On Duty', 'Off Duty'], default: 'Off Duty' },
+    location:      { lat: Number, lng: Number },
+    emt:           { name: String, emtId: String, mobile: String },
+    pilot:         { name: String, pilotId: String, mobile: String },
+    assignedTask:  { type: String },
+    lastLogin:     { type: Date },
     forcePasswordChange: { type: Boolean, default: false },
-    lastLogin: Date,
-    createdAt: { type: Date, default: Date.now }
+    createdAt:     { type: Date, default: Date.now },
+    updatedAt:     { type: Date, default: Date.now }
 });
 
 ambulanceSchema.pre('save', async function (next) {

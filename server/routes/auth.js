@@ -1,30 +1,70 @@
 const router = require('express').Router();
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const Hospital = require('../models/Hospital');
 const Doctor = require('../models/Doctor');
 const Nurse = require('../models/Nurse');
 const Ambulance = require('../models/Ambulance');
 const SuperAdmin = require('../models/SuperAdmin');
+const Pharmacy = require('../models/Pharmacy');
+const Clinic = require('../models/Clinic');
+const DiagnosticCenter = require('../models/DiagnosticCenter');
+const OtpToken = require('../models/OtpToken');
+const env = require('../config/env');
+const { authLimiter, otpLimiter } = require('../config/rateLimit');
+const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
+const { sendOtpEmail } = require('../utils/mailer');
+const { success, error } = require('../utils/response');
 
-const sign = (payload) => jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+const sign = (payload) => jwt.sign(payload, env.JWT_SECRET, { expiresIn: '24h' });
 
-router.post('/login', async (req, res) => {
+const OTP_EXPIRY_MS = (parseInt(env.OTP_EXPIRY_MIN, 10) || 10) * 60 * 1000;
+
+const getModelAndFilter = (role, username) => {
+    switch (role) {
+        case 'hospital':
+            return { Model: Hospital, filter: { hospitalId: username }, ref: 'hospitalId' };
+        case 'doctor':
+            return { Model: Doctor, filter: { doctorId: username }, ref: 'doctorId' };
+        case 'nurse':
+            return { Model: Nurse, filter: { nurseId: username }, ref: 'nurseId' };
+        case 'ambulance':
+            return { Model: Ambulance, filter: { ambulanceId: username }, ref: 'ambulanceId' };
+        case 'superadmin':
+            return { Model: SuperAdmin, filter: { username }, ref: 'username' };
+        case 'pharmacy':
+            return { Model: Pharmacy, filter: { pharmacyId: username }, ref: 'pharmacyId' };
+        case 'clinic':
+            return { Model: Clinic, filter: { clinicId: username }, ref: 'clinicId' };
+        case 'diagnostic':
+            return { Model: DiagnosticCenter, filter: { diagnosticId: username }, ref: 'diagnosticId', selectPassword: true };
+        default:
+            return null;
+    }
+};
+
+const findUser = async (modelInfo) => {
+    if (modelInfo.selectPassword) {
+        return modelInfo.Model.findOne(modelInfo.filter).select('+password');
+    }
+    return modelInfo.Model.findOne(modelInfo.filter);
+};
+
+const isStrongPassword = (password) =>
+    typeof password === 'string'
+    && password.length >= 8
+    && /[A-Za-z]/.test(password)
+    && /\d/.test(password);
+
+router.post('/login', authLimiter, async (req, res) => {
     try {
         let { role, username, password } = req.body;
         role = (role || '').toLowerCase().trim();
         username = (username || '').trim();
 
-        let user = null;
-        if (role === 'hospital') user = await Hospital.findOne({ hospitalId: username });
-        else if (role === 'doctor') user = await Doctor.findOne({ doctorId: username });
-        else if (role === 'nurse') user = await Nurse.findOne({ nurseId: username });
-        else if (role === 'ambulance') user = await Ambulance.findOne({
-            $or: [{ ambulanceId: username }, { 'emt.emtId': username }]
-        });
-        else if (role === 'superadmin') user = await SuperAdmin.findOne({ username });
-        else return res.status(400).json({ message: 'Invalid role' });
+        const modelInfo = getModelAndFilter(role, username);
+        if (!modelInfo) return res.status(400).json({ message: 'Invalid role' });
 
+        const user = await findUser(modelInfo);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const ok = await user.comparePassword(password);
@@ -32,20 +72,25 @@ router.post('/login', async (req, res) => {
 
         const payload = { role, id: user._id, ref: username };
         if (user.hospitalId) payload.hospitalId = user.hospitalId;
+        if (user.clinicId) payload.clinicId = user.clinicId;
+        if (role === 'hospital') payload.hospitalId = user.hospitalId || username;
+        if (role === 'diagnostic') payload.diagnosticId = user.diagnosticId;
 
         const token = sign(payload);
         const userObj = {
             id: user._id,
             role,
-            username: username,
+            username,
             hospitalId: payload.hospitalId,
-            ...(role === 'doctor' ? { name: user.name, speciality: user.speciality, doctorId: user.doctorId } : {}),
-            ...(role === 'nurse' ? { name: user.name, nurseId: user.nurseId } : {}),
-            ...(role === 'ambulance' ? { vehicleNumber: user.vehicleNumber, ambulanceId: user.ambulanceId } : {})
+            clinicId: payload.clinicId,
+            diagnosticId: payload.diagnosticId,
+            name: user.name,
+            email: user.email,
         };
 
         if (role === 'ambulance') {
-            user.lastLogin = new Date(); user.status = 'On Duty';
+            user.lastLogin = new Date();
+            user.status = 'On Duty';
             await user.save();
         }
 
@@ -55,27 +100,83 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Requires the caller to supply their current password for verification
-router.post('/change-password', async (req, res) => {
+router.post('/request-otp', otpLimiter, async (req, res) => {
     try {
-        const { role, username, currentPassword, newPassword } = req.body;
-        if (!currentPassword) return res.status(400).json({ message: 'Current password is required' });
-        let Model, filter;
-        if (role === 'hospital') { Model = Hospital; filter = { hospitalId: username }; }
-        else if (role === 'doctor') { Model = Doctor; filter = { doctorId: username }; }
-        else if (role === 'nurse') { Model = Nurse; filter = { nurseId: username }; }
-        else if (role === 'ambulance') { Model = Ambulance; filter = { $or: [{ ambulanceId: username }, { 'emt.emtId': username }] }; }
-        else if (role === 'superadmin') { Model = SuperAdmin; filter = { username }; }
-        else return res.status(400).json({ message: 'Invalid role' });
-        const doc = await Model.findOne(filter);
-        if (!doc) return res.status(404).json({ message: 'User not found' });
-        const valid = await doc.comparePassword(currentPassword);
-        if (!valid) return res.status(401).json({ message: 'Current password is incorrect' });
-        doc.password = newPassword;
-        if (doc.forcePasswordChange !== undefined) doc.forcePasswordChange = false;
-        await doc.save();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ message: e.message }); }
+        const { role, username } = req.body;
+        const modelInfo = getModelAndFilter(role, username);
+
+        const generic = { success: true, message: 'OTP sent if account exists' };
+
+        if (!modelInfo) return res.json(generic);
+
+        const user = await modelInfo.Model.findOne(modelInfo.filter);
+        if (!user?.email) return res.json(generic);
+
+        const otp = generateOtp();
+        const hashedOtp = await hashOtp(otp);
+        const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+        await OtpToken.findOneAndUpdate(
+            { email: user.email, purpose: 'password-change' },
+            { otpHash: hashedOtp, attempts: 0, expiresAt },
+            { upsert: true, new: true }
+        );
+
+        await sendOtpEmail(user.email, otp);
+        return res.json(generic);
+    } catch (e) {
+        return res.json({ success: true, message: 'OTP sent if account exists' });
+    }
+});
+
+router.post('/change-password', otpLimiter, async (req, res) => {
+    try {
+        const { role, username, otp, newPassword } = req.body;
+
+        if (!isStrongPassword(newPassword)) {
+            return error(
+                res,
+                'Password must be at least 8 characters with one letter and one number',
+                'VALIDATION',
+                400
+            );
+        }
+
+        const modelInfo = getModelAndFilter(role, username);
+        if (!modelInfo) return error(res, 'Invalid role', 'VALIDATION', 400);
+
+        const user = await modelInfo.Model.findOne(modelInfo.filter);
+        if (!user) return error(res, 'User not found', 'NOT_FOUND', 404);
+
+        const email = user.email;
+        if (!email) return error(res, 'No registered email found for this user', 'VALIDATION', 400);
+
+        const tokenDoc = await OtpToken.findOne({ email, purpose: 'password-change' });
+        if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
+            if (tokenDoc) await OtpToken.deleteOne({ _id: tokenDoc._id });
+            return error(res, 'Invalid or expired OTP', 'OTP_EXPIRED', 400);
+        }
+
+        const isValid = await verifyOtp(otp, tokenDoc.otpHash);
+        if (!isValid) {
+            tokenDoc.attempts = (tokenDoc.attempts || 0) + 1;
+            await tokenDoc.save();
+            if (tokenDoc.attempts >= 5) {
+                await OtpToken.deleteOne({ _id: tokenDoc._id });
+                return error(res, 'Too many failed attempts. Request a new OTP.', 'OTP_LOCKED', 400);
+            }
+            return error(res, 'Invalid OTP', 'OTP_INVALID', 400);
+        }
+
+        user.password = newPassword;
+        if (user.forcePasswordChange !== undefined) user.forcePasswordChange = false;
+        await user.save();
+        await OtpToken.deleteOne({ _id: tokenDoc._id });
+
+        return success(res, {}, 'Password updated successfully');
+    } catch (e) {
+        return error(res, e.message, 'ERROR', 500);
+    }
 });
 
 module.exports = router;

@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.PROD ? 'https://web-production-1a8896.up.railway.app/api' : '/api';
+const BASE_URL = import.meta.env.VITE_API_URL
+    || (import.meta.env.PROD ? 'https://web-production-1a8896.up.railway.app/api' : '/api');
 const api = axios.create({ baseURL: BASE_URL });
 
 api.interceptors.request.use(config => {
@@ -15,6 +16,7 @@ api.interceptors.response.use(
         if (err.response?.status === 401) {
             localStorage.removeItem('rc_token');
             localStorage.removeItem('rc_user');
+            window.dispatchEvent(new Event('auth:logout'));
             window.location.href = '/';
         }
         return Promise.reject(err);

@@ -1,409 +1,207 @@
-# RapidCare MongoDB Schema Map
+# RapidCare V3 MongoDB Schema Map
 
-This file documents the MongoDB collections used by the current project, which UI pages depend on them, and whether they exist in a fresh setup.
+This file documents the MongoDB collections used by the RapidCare V3 system, showing which UI pages depend on them, and the schema definitions.
 
-## Fresh setup behavior
+## Fresh Setup Behavior
 
 There are 2 distinct stages:
 
-1. Fresh backend startup on an empty cluster
-
-   - `superadmins` gets 1 document automatically from server bootstrap:
+1. **Fresh backend startup on an empty database:**
+   - The `superadmins` collection gets 1 bootstrap document automatically from server startup:
      - `username`: `admin@rapidcare`
-     - `password`: `rapidcare123`
+     - `password`: `rapidcare123` (hashed)
    - No other collection gets a document automatically.
 
-2. First hospital registration from Admin Portal
-   - `hospitals` gets 1 document when `POST /api/admin/register-hospital` is used.
-   - Other collections still remain empty until the related portal action is used.
+2. **Facility registration from Admin Portal:**
+   - Hospitals, Pharmacies, and Clinics get created via Admin endpoints (`POST /api/admin/register-hospital`, `/api/admin/register-pharmacy`, `/api/admin/register-clinic`).
+   - Other sub-collections (doctors, nurses, beds, medicines, clinic services) remain empty until registered/created via their respective portals.
 
-Important MongoDB note:
+*Note: MongoDB creates collections lazily. If a collection has no documents, it will not appear in Mongoose database visualizers until the first insert.*
 
-- MongoDB creates collections lazily.
-- If a collection has no documents yet, it may not appear in Atlas even though the schema/model exists in code.
+---
 
-## App pages to collection map
+## App Pages to Collection Map
 
-| Page / Portal                   | Collections read                                                                                                                    | Collections written                                 |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Home `/`                        | `superadmins` via auth, `hospitals`, `bloodbanks`                                                                                   | `donors`                                            |
-| Public Portal `/public`         | `hospitals`, `beds`, `doctors`, `bloodbanks`, `announcements`                                                                       | `donors`                                            |
-| Bed Scan `/bed/:bedId`          | `beds`                                                                                                                              | `beds`                                              |
-| Reception Portal `/reception/*` | `hospitals`, `beds`, `doctors`, `nurses`, `ambulances`, `bloodbanks`, `donors`, `announcements`, `emergencyrequests`, `attendances` | same collections except `hospitals` is update-only  |
-| Doctor Portal `/doctor/*`       | `doctors`, `attendances`, `hospitals`                                                                                               | `doctors`, `attendances`                            |
-| Nurse Portal `/nurse/*`         | `nurses`, `beds`                                                                                                                    | `beds`                                              |
-| Ambulance Portal `/ambulance/*` | `ambulances`, `emergencyrequests`, `hospitals`                                                                                      | `ambulances`, `emergencyrequests`                   |
-| Admin Portal `/admin/*`         | `superadmins`, `hospitals`, `doctors`, `nurses`, `ambulances`, `emergencyrequests`                                                  | `hospitals`, optional deletes in listed collections |
+| Page / Portal | Collections Read | Collections Written |
+| :--- | :--- | :--- |
+| **Home `/`** | `superadmins` (auth), `hospitals`, `pharmacies`, `clinics` | `donors` |
+| **Public Portal `/public`** | `hospitals`, `beds`, `doctors`, `pharmacies`, `medicines`, `clinics`, `clinicservices` | `donors`, `appointmentrequests` |
+| **Bed Scan `/bed/scan`** | `beds` | `beds` |
+| **Reception Portal `/reception/*`** | `hospitals`, `beds`, `doctors`, `nurses`, `ambulances`, `bloodbanks`, `donors`, `announcements` | Same (except `hospitals` which is update-only) |
+| **Doctor Portal `/doctor/*`** | `doctors`, `hospitals`, `clinics` | `doctors` |
+| **Nurse Portal `/nurse/*`** | `nurses`, `beds` | `beds` |
+| **Ambulance Portal `/ambulance/*`** | `ambulances`, `hospitals` | `ambulances` (GPS heartbeat updates) |
+| **Pharmacy Portal `/pharmacy/*`** | `pharmacies`, `medicines` | `medicines` (Inventory CRUD) |
+| **Clinic Portal `/clinic/*`** | `clinics`, `clinicservices`, `doctors`, `appointmentrequests` | `clinicservices`, `appointmentrequests` |
+| **Admin Portal `/admin/*`** | `superadmins`, `hospitals`, `pharmacies`, `clinics`, `doctors`, `nurses`, `ambulances` | Facility registrations & Master Delete with OTP |
 
-## Collections
+---
 
-### `superadmins`
+## Active Collections & Mongoose Schemas
 
-- Model: `SuperAdmin`
-- Used by:
-  - Admin login
-  - Home page staff login
-  - Admin portal auth
-- Key fields:
-  - `username` required unique
-  - `password` required
-  - `createdAt`
-- Present after fresh backend startup:
-  - Yes
-- Present after first hospital registration:
-  - Yes
-- Auto-created by:
-  - `server.js` bootstrap
+### 1. `superadmins`
+- **Model:** `SuperAdmin`
+- **Key fields:**
+  - `username`: String (required, unique)
+  - `password`: String (required, hashed)
+  - `email`: String (optional, used for 2FA deletion OTPs)
+  - `createdAt`: Date
 
-### `hospitals`
+### 2. `hospitals`
+- **Model:** `Hospital`
+- **Key fields:**
+  - `hospitalId`: String (required, unique)
+  - `name`: String (required)
+  - `password`: String (required, hashed)
+  - `email`: String
+  - `contact`: String
+  - `address`: String
+  - `location`: `{ lat: Number, lng: Number }`
+  - `services`: Array of Strings
+  - `gallery`: Array of Strings (image URLs)
+  - `forcePasswordChange`: Boolean (default: `false`)
 
-- Model: `Hospital`
-- Used by:
-  - Home page
-  - Public portal
-  - Reception portal
-  - Admin portal
-  - Doctor geofence attendance
-- Key fields:
-  - `hospitalId` required unique
-  - `name` required
-  - `contact`
-  - `email`
-  - `password` required
-  - `address.street`
-  - `address.city`
-  - `address.district`
-  - `address.state`
-  - `location.lat`
-  - `location.lng`
-  - `googleMapUrl`
-  - `services[]`
-  - `facilities[]`
-  - `insurance[]`
-  - `tests[]`
-  - `procedures[]`
-  - `surgery[]`
-  - `therapy[]`
-  - `management[]`
-  - `highlights[]`
-  - `treatment[]`
-  - `gallery[]`
-  - `attendanceQR.presentQR`
-  - `attendanceQR.absentQR`
-  - `attendanceQR.generatedAt`
-  - `forcePasswordChange`
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - Yes
-- Auto-created by:
-  - Admin registering a hospital
+### 3. `doctors`
+- **Model:** `Doctor`
+- **Key fields:**
+  - `doctorId`: String (required, unique)
+  - `name`: String (required)
+  - `password`: String (required, hashed)
+  - `email`: String
+  - `contact`: String
+  - `specialization`: String
+  - `availability`: String (enum: `['Available', 'Unavailable']`, default: `'Unavailable'`)
+  - `photo`: String (image URL)
+  - `hospitalId`: String (nullable ref to hospital)
+  - `clinicId`: String (nullable ref to clinic)
 
-### `doctors`
+### 4. `nurses`
+- **Model:** `Nurse`
+- **Key fields:**
+  - `nurseId`: String (required, unique)
+  - `name`: String (required)
+  - `password`: String (required, hashed)
+  - `hospitalId`: String (required ref to hospital)
+  - `mobile`: String
 
-- Model: `Doctor`
-- Used by:
-  - Public portal
-  - Reception portal
-  - Doctor portal
-  - Admin portal
-- Key fields:
-  - `doctorId` required unique
-  - `hospitalId` required
-  - `name` required
-  - `speciality`
-  - `qualification`
-  - `experience`
-  - `photoUrl`
-  - `availability`
-  - `shift`
-  - `password` required
-  - `forcePasswordChange`
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception or superadmin creates doctors via `POST /api/doctors`
+### 5. `ambulances`
+- **Model:** `Ambulance`
+- **Key fields:**
+  - `ambulanceId`: String (required, unique)
+  - `hospitalId`: String (required ref to hospital)
+  - `vehicleNumber`: String (required)
+  - `password`: String (required, hashed)
+  - `status`: String (enum: `['Off Duty', 'On Duty', 'In Transit', 'Arrived', 'En Route']`)
+  - `location`: `{ lat: Number, lng: Number, updatedAt: Date }`
+  - `emt`: `{ name: String, emtId: String, mobile: String }`
+  - `pilot`: `{ name: String, pilotId: String, mobile: String }`
+  - `assignedTask`: String
 
-### `nurses`
+### 6. `beds`
+- **Model:** `Bed`
+- **Key fields:**
+  - `bedId`: String (required, unique)
+  - `hospitalId`: String (required ref to hospital)
+  - `bedNumber`: String (required)
+  - `wardNumber`: String (required)
+  - `bedType`: String (e.g. ICU, General, Ventilator)
+  - `status`: String (enum: `['Available', 'Occupied', 'Cleaning']`)
+  - `patientName`: String
+  - `updatedAt`: Date
 
-- Model: `Nurse`
-- Used by:
-  - Reception portal
-  - Nurse portal
-  - Admin portal
-- Key fields:
-  - `nurseId` required unique
-  - `hospitalId` required
-  - `name` required
-  - `mobile` required
-  - `photoUrl`
-  - `password` required
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception or superadmin creates nurses via `POST /api/nurses`
+### 7. `bloodbanks`
+- **Model:** `BloodBank`
+- **Key fields:**
+  - `hospitalId`: String (required ref to hospital)
+  - `bloodType`: String (required, unique per hospital)
+  - `units`: Number (default: `0`)
+  - `updatedAt`: Date
 
-### `ambulances`
+### 8. `donors`
+- **Model:** `Donor`
+- **Key fields:**
+  - `hospitalId`: String (required ref to hospital)
+  - `name`: String (required)
+  - `bloodGroup`: String (required)
+  - `contact`: String (required)
+  - `status`: String (enum: `['Pending', 'Approved', 'Rejected']`)
+  - `createdAt`: Date
 
-- Model: `Ambulance`
-- Used by:
-  - Reception portal
-  - Ambulance portal
-  - Admin portal
-  - Hospital stats
-- Key fields:
-  - `ambulanceId` required unique
-  - `hospitalId` required
-  - `vehicleNumber` required
-  - `ambulanceNumber`
-  - `password` required
-  - `status`
-  - `location.lat`
-  - `location.lng`
-  - `location.updatedAt`
-  - `emt.name`
-  - `emt.emtId`
-  - `emt.mobile`
-  - `pilot.name`
-  - `pilot.pilotId`
-  - `pilot.mobile`
-  - `assignedTask`
-  - `forcePasswordChange`
-  - `lastLogin`
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception or superadmin creates ambulances via `POST /api/ambulances`
+### 9. `announcements`
+- **Model:** `Announcement`
+- **Key fields:**
+  - `hospitalId`: String (nullable ref to hospital)
+  - `clinicId`: String (nullable ref to clinic)
+  - `title`: String (required)
+  - `content`: String (required)
+  - `expiresAt`: Date
+  - `createdAt`: Date
 
-### `beds`
+### 10. `pharmacies`
+- **Model:** `Pharmacy`
+- **Key fields:**
+  - `pharmacyId`: String (required, unique)
+  - `name`: String (required)
+  - `password`: String (required, hashed)
+  - `email`: String
+  - `contact`: String
+  - `address`: String
+  - `location`: `{ lat: Number, lng: Number }`
 
-- Model: `Bed`
-- Used by:
-  - Public portal
-  - Reception portal
-  - Nurse portal
-  - Bed scan page
-  - Hospital stats
-- Key fields:
-  - `bedId` required unique
-  - `hospitalId` required
-  - `bedNumber` required
-  - `wardNumber` required
-  - `bedType`
-  - `status`
-  - `qrUrl`
-  - `patientName`
-  - `admittedAt`
-  - `updatedAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception bulk-creates beds via `POST /api/beds/bulk`
+### 11. `medicines`
+- **Model:** `Medicine`
+- **Key fields:**
+  - `pharmacyId`: String (required ref to pharmacy)
+  - `name`: String (required)
+  - `dosage`: String (e.g. 500mg)
+  - `quantity`: Number (default: `0`)
+  - `price`: Number (default: `0`)
+  - `category`: String
+  - `requiresPrescription`: Boolean (default: `false`)
 
-### `emergencyrequests`
+### 12. `clinics`
+- **Model:** `Clinic`
+- **Key fields:**
+  - `clinicId`: String (required, unique)
+  - `name`: String (required)
+  - `password`: String (required, hashed)
+  - `clinicType`: String
+  - `email`: String
+  - `contact`: String
+  - `address`: String
+  - `location`: `{ lat: Number, lng: Number }`
 
-- Model: `EmergencyRequest`
-- Used by:
-  - Reception portal emergency queue
-  - Ambulance portal
-  - Admin stats
-- Key fields:
-  - `hospitalId` required
-  - `ambulanceId`
-  - `source`
-  - `patientName` required
-  - `age`
-  - `gender`
-  - `mobile`
-  - `address`
-  - `emergencyType`
-  - `equipment`
-  - `symptoms`
-  - `ambulanceNotes`
-  - `condition`
-  - `reason`
-  - `denialReason`
-  - `assignedDoctor`
-  - `replyMessage`
-  - `status`
-  - `transferredTo`
-  - `referredFrom`
-  - `bedId`
-  - `createdAt`
-  - `updatedAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Ambulance creates an emergency request via `POST /api/emergency`
-  - A transfer creates another cloned request for the receiving hospital
+### 13. `clinicservices`
+- **Model:** `ClinicService`
+- **Key fields:**
+  - `clinicId`: String (required ref to clinic)
+  - `name`: String (required)
+  - `cost`: Number (default: `0`)
+  - `available`: Boolean (default: `true`)
 
-### `bloodbanks`
+### 14. `appointmentrequests`
+- **Model:** `AppointmentRequest`
+- **Key fields:**
+  - `clinicId`: String (required ref to clinic)
+  - `name`: String (required)
+  - `phone`: String (required)
+  - `preferredTime`: Date
+  - `status`: String (enum: `['Pending', 'Confirmed', 'Completed', 'Cancelled']`)
+  - `createdAt`: Date
 
-- Model: `BloodBank`
-- Used by:
-  - Home page blood overview
-  - Public portal
-  - Reception blood bank section
-- Key fields:
-  - `hospitalId` required
-  - `bloodType` required
-  - `units`
-  - `lastUpdated`
-  - `notes`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception or superadmin upserts stock via `POST /api/bloodbank/upsert`
-  - Reception creates stock via `POST /api/bloodbank`
+### 15. `otptokens`
+- **Model:** `OtpToken`
+- **Key fields:**
+  - `email`: String (required)
+  - `otpHash`: String (required)
+  - `purpose`: String (e.g. `'master-delete'`, `'password-reset'`)
+  - `attempts`: Number (default: `0`)
+  - `expiresAt`: Date
+  - `createdAt`: Date
 
-### `donors`
+---
 
-- Model: `Donor`
-- Used by:
-  - Home page donor form
-  - Public portal donor form
-  - Reception donor management
-- Key fields:
-  - `hospitalId` required
-  - `name` required
-  - `bloodType` required
-  - `contact` required
-  - `city` required
-  - `unitsDonated`
-  - `status`
-  - `remarks`
-  - `createdAt`
-  - `updatedAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Public or home donor form submits via `POST /api/bloodbank/donors`
-
-### `announcements`
-
-- Model: `Announcement`
-- Used by:
-  - Public portal hospital detail
-  - Reception announcements section
-- Key fields:
-  - `hospitalId` required
-  - `title` required
-  - `content` required
-  - `priority`
-  - `expiresAt`
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Reception posts an announcement via `POST /api/announcements`
-
-### `attendances`
-
-- Model: `Attendance`
-- Used by:
-  - Doctor portal
-  - Reception attendance QR flow
-  - Public portal doctor freshness timestamps
-- Key fields:
-  - `doctorId` required
-  - `hospitalId` required
-  - `date` required
-  - `availability`
-  - `shift`
-  - `checkIn`
-  - `checkOut`
-  - `totalHours`
-  - `method`
-  - `markedBy`
-  - `createdAt`
-- Present after fresh backend startup:
-  - No
-- Present after first hospital registration:
-  - No
-- Created when:
-  - Doctor checks in/out
-  - Reception overrides attendance
-  - Attendance QR scan endpoint is used
-
-## What will exist after a fresh registration?
-
-If by "fresh registration" you mean:
-
-### Case A: brand new cluster + first backend startup
-
-- Documents present:
-  - `superadmins`: Yes
-- Documents absent:
-  - `hospitals`
-  - `doctors`
-  - `nurses`
-  - `ambulances`
-  - `beds`
-  - `emergencyrequests`
-  - `bloodbanks`
-  - `donors`
-  - `announcements`
-  - `attendances`
-
-### Case B: after logging in as admin and registering the first hospital
-
-- Documents present:
-  - `superadmins`: Yes
-  - `hospitals`: Yes
-- Documents still absent until user actions create them:
-  - `doctors`
-  - `nurses`
-  - `ambulances`
-  - `beds`
-  - `emergencyrequests`
-  - `bloodbanks`
-  - `donors`
-  - `announcements`
-  - `attendances`
-
-## Practical minimum for each portal to work
-
-- Home:
-  - `superadmins`
-  - at least 1 `hospital`
-- Public Portal:
-  - at least 1 `hospital`
-  - optional `beds`, `doctors`, `bloodbanks`, `announcements`
-- Reception:
-  - 1 `hospital` login document
-  - optional `beds`, `doctors`, `nurses`, `ambulances`, `bloodbanks`, `announcements`, `emergencyrequests`
-- Doctor:
-  - 1 `doctor`
-- Nurse:
-  - 1 `nurse`
-  - usually some `beds`
-- Ambulance:
-  - 1 `ambulance`
-- Admin:
-  - 1 `superadmin`
-
-## Source of truth in code
-
-- Models: [server/models](/d:/2026Final%20Minor/rapidcarev3-master/rapidcarev3-master/server/models)
-- Startup bootstrap: [server/server.js](/d:/2026Final%20Minor/rapidcarev3-master/rapidcarev3-master/server/server.js)
-- Main registration flow: [server/routes/admin.js](/d:/2026Final%20Minor/rapidcarev3-master/rapidcarev3-master/server/routes/admin.js)
+## Summary of Removed Modules (V2 Legacy Cleanups)
+The following database concepts and collections from V2 are **completely removed** to simplify the architecture:
+- `emergencyrequests`: Unified REST APIs for patient queues and triage are now standard clinic appointment requests or local bed management.
+- `attendances`: geofencing, check-in, check-out, geofence coordinates, and QR attendance schedules are removed. Doctor availability is tracked in real-time as a simple state toggle on their profile.

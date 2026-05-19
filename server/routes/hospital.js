@@ -4,96 +4,139 @@ const path = require('path');
 const fs = require('fs');
 const auth = require('../middleware/auth');
 const Hospital = require('../models/Hospital');
+const cache = require('../utils/cache');
 const Bed = require('../models/Bed');
 const Doctor = require('../models/Doctor');
+const BloodBank = require('../models/BloodBank');
 const Ambulance = require('../models/Ambulance');
-const Attendance = require('../models/Attendance');
+const Nurse = require('../models/Nurse');
+
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+const fileFilter = (req, file, cb) => {
+    if (ALLOWED_MIME.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only image files (JPEG, PNG, WebP, GIF) are allowed'), false);
+};
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const dir = path.join(__dirname, '../uploads/photos');
+        const dir = path.join(__dirname, '../uploads/gallery');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
     },
-    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
+    }
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// GET all hospitals (public)
+// List all
 router.get('/', async (req, res) => {
     try {
-        const hospitals = await Hospital.find({}, '-password');
+        const cacheKey = 'hospitals:list';
+        const hit = cache.get(cacheKey);
+        if (hit) return res.json(hit);
+
+        const hospitals = await Hospital.find({}, 'hospitalId name location address services contact').lean();
+        cache.set(cacheKey, hospitals, 60);
         res.json(hospitals);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// GET single hospital
+// Single with details
 router.get('/:id', async (req, res) => {
     try {
-        const h = await Hospital.findOne({ hospitalId: req.params.id }, '-password');
+        const cacheKey = `hospital:${req.params.id}`;
+        const hit = cache.get(cacheKey);
+        if (hit) return res.json(hit);
+
+        const h = await Hospital.findOne({ hospitalId: req.params.id }, '-password').lean();
         if (!h) return res.status(404).json({ message: 'Not found' });
+
+        const [beds, doctorCount, bloodBank] = await Promise.all([
+            Bed.find({ hospitalId: h.hospitalId }),
+            Doctor.countDocuments({ hospitalId: h.hospitalId, availability: 'Available' }),
+            BloodBank.find({ hospitalId: h.hospitalId })
+        ]);
+
+        const bedSummary = { total: beds.length, vacant: beds.filter(b => b.status === 'Available').length };
+
+        const payload = { ...h, bedSummary, availableDoctors: doctorCount, bloodBank };
+        cache.set(cacheKey, payload, 30);
+        res.json(payload);
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+const HOSPITAL_ALLOWED = ['name', 'contact', 'email', 'address', 'location', 'services', 'facilities', 'insurance', 'procedures', 'surgery', 'therapy', 'googleMapUrl', 'gallery'];
+
+const pickAllowed = (body, allowed) => {
+    const picked = {};
+    for (const key of allowed) {
+        if (body[key] !== undefined) picked[key] = body[key];
+    }
+    return picked;
+};
+
+// Update own profile
+router.put('/:id', auth(['hospital']), async (req, res) => {
+    try {
+        if (req.user.ref !== req.params.id) return res.status(403).json({ message: 'Forbidden: Can only update own profile' });
+        const updates = pickAllowed(req.body, HOSPITAL_ALLOWED);
+        const h = await Hospital.findOneAndUpdate({ hospitalId: req.params.id }, { $set: updates }, { new: true }).select('-password');
+        cache.del('hospitals:list');
+        cache.del(`hospital:${req.params.id}`);
         res.json(h);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// UPDATE hospital
-router.put('/:id', auth(['hospital', 'superadmin']), async (req, res) => {
-    try {
-        const h = await Hospital.findOneAndUpdate({ hospitalId: req.params.id }, req.body, { new: true }).select('-password');
-        res.json(h);
-    } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// Upload gallery
-router.post('/:id/gallery', auth(['hospital']), upload.array('images', 10), async (req, res) => {
-    try {
-        const urls = req.files.map(f => `/uploads/photos/${f.filename}`);
-        await Hospital.findOneAndUpdate({ hospitalId: req.params.id }, { $push: { gallery: { $each: urls } } });
-        res.json({ success: true, urls });
-    } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// Delete gallery image
-router.delete('/:id/gallery', auth(['hospital']), async (req, res) => {
-    try {
-        const { url } = req.body;
-        await Hospital.findOneAndUpdate({ hospitalId: req.params.id }, { $pull: { gallery: url } });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// Dashboard stats
+// Internal stats
 router.get('/:id/stats', auth(['hospital']), async (req, res) => {
     try {
-        const hid = req.params.id;
-        const beds = await Bed.find({ hospitalId: hid });
-        const availableBeds = beds.filter(b => b.status === 'Vacant').length;
-        const doctors = await Doctor.find({ hospitalId: hid });
-        const activeDocs = doctors.filter(d => d.availability === 'Available').length;
-        const ambulances = await Ambulance.find({ hospitalId: hid });
-        const activeAmbs = ambulances.filter(a => a.status === 'On Duty').length;
-        res.json({ totalBeds: beds.length, availableBeds, totalDoctors: doctors.length, activeDocs, totalAmbulances: ambulances.length, activeAmbs });
+        if (req.user.ref !== req.params.id) return res.status(403).json({ message: 'Forbidden' });
+        const [beds, doctors, ambulances, nurses] = await Promise.all([
+            Bed.find({ hospitalId: req.params.id }),
+            Doctor.countDocuments({ hospitalId: req.params.id }),
+            Ambulance.countDocuments({ hospitalId: req.params.id }),
+            Nurse.countDocuments({ hospitalId: req.params.id })
+        ]);
+
+        const bedCounts = {};
+        beds.forEach(b => {
+            if (!bedCounts[b.bedType]) bedCounts[b.bedType] = 0;
+            bedCounts[b.bedType]++;
+        });
+
+        res.json({ bedCounts, doctors, ambulances, nurses });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Attendance QR scan endpoint
-router.get('/:id/attendance-scan', auth(['hospital', 'nurse', 'superadmin']), async (req, res) => {
+// Gallery upload
+router.post('/:id/gallery', auth(['hospital']), upload.array('images', 10), async (req, res) => {
     try {
-        const { type, doctorId } = req.query;
-        if (!doctorId) return res.status(400).json({ message: 'doctorId required' });
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        let attendance = await Attendance.findOne({ doctorId, date: today });
-        if (type === 'Present') {
-            if (!attendance) attendance = new Attendance({ doctorId, hospitalId: req.params.id, date: today, availability: 'Present', checkIn: new Date(), method: 'QR' });
-            else { attendance.checkIn = new Date(); attendance.availability = 'Present'; }
-        } else {
-            if (attendance && attendance.checkIn) {
-                const hours = ((new Date() - attendance.checkIn) / 3600000).toFixed(1);
-                attendance.checkOut = new Date(); attendance.totalHours = hours;
-            }
-        }
-        if (attendance) await attendance.save();
-        res.send(`<h2>Attendance ${type === 'Present' ? 'Check-In' : 'Check-Out'} recorded!</h2><a href="/">Back</a>`);
+        if (req.user.ref !== req.params.id) return res.status(403).json({ message: 'Forbidden' });
+        const urls = req.files.map(f => `/uploads/gallery/${f.filename}`);
+        const h = await Hospital.findOneAndUpdate(
+            { hospitalId: req.params.id }, 
+            { $push: { gallery: { $each: urls } } }, 
+            { new: true }
+        ).select('-password');
+        res.json(h);
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Gallery delete
+router.delete('/:id/gallery', auth(['hospital']), async (req, res) => {
+    try {
+        if (req.user.ref !== req.params.id) return res.status(403).json({ message: 'Forbidden' });
+        const { imageUrl } = req.body;
+        if (typeof imageUrl !== 'string') return res.status(400).json({ message: 'imageUrl must be a string' });
+        const h = await Hospital.findOneAndUpdate(
+            { hospitalId: req.params.id }, 
+            { $pull: { gallery: imageUrl } }, 
+            { new: true }
+        ).select('-password');
+        res.json(h);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 

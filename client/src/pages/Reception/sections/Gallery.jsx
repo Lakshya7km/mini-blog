@@ -21,7 +21,7 @@ export default function Gallery({ hospitalId }) {
     }
 
     const remove = async (url) => {
-        await api.delete(`/hospitals/${hospitalId}/gallery`, { data: { url } })
+        await api.delete(`/hospitals/${hospitalId}/gallery`, { data: { imageUrl: url } })
         setImages(imgs => imgs.filter(i => i !== url))
     }
 

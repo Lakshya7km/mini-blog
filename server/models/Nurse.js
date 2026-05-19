@@ -2,13 +2,14 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
 const nurseSchema = new mongoose.Schema({
-    nurseId: { type: String, required: true, unique: true, trim: true },
-    hospitalId: { type: String, required: true },
-    name: { type: String, required: true },
-    mobile: { type: String, required: true },
-    photoUrl: String,
-    password: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
+    nurseId:       { type: String, required: true, unique: true, trim: true },
+    name:          { type: String, required: true },
+    password:      { type: String, required: true },
+    email:         { type: String },
+    contact:       { type: String },
+    hospitalId:    { type: String, required: true },
+    forcePasswordChange: { type: Boolean, default: false },
+    createdAt:     { type: Date, default: Date.now }
 });
 
 nurseSchema.pre('save', async function (next) {

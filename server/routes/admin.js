@@ -1,51 +1,107 @@
 const router = require('express').Router();
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const auth = require('../middleware/auth');
 const SuperAdmin = require('../models/SuperAdmin');
 const Hospital = require('../models/Hospital');
+const Pharmacy = require('../models/Pharmacy');
+const Clinic = require('../models/Clinic');
+const DiagnosticCenter = require('../models/DiagnosticCenter');
 const Doctor = require('../models/Doctor');
 const Nurse = require('../models/Nurse');
 const Ambulance = require('../models/Ambulance');
-const EmergencyRequest = require('../models/EmergencyRequest');
+const OtpToken = require('../models/OtpToken');
+const cache = require('../utils/cache');
+const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
+const { sendOtpEmail } = require('../utils/mailer');
+const { success, error } = require('../utils/response');
 
-router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const admin = await SuperAdmin.findOne({ username });
-        if (!admin) return res.status(404).json({ message: 'Admin not found' });
-        const ok = await admin.comparePassword(password);
-        if (!ok) return res.status(401).json({ message: 'Invalid password' });
-        const token = jwt.sign({ role: 'superadmin', id: admin._id, ref: username }, process.env.JWT_SECRET, { expiresIn: '24h' });
-        res.json({ token, admin: { username: admin.username } });
-    } catch (e) { res.status(500).json({ message: e.message }); }
-});
+const COLLECTIONS = {
+    hospitals: Hospital,
+    pharmacies: Pharmacy,
+    clinics: Clinic,
+    diagnostics: DiagnosticCenter,
+    doctors: Doctor,
+    nurses: Nurse,
+    ambulances: Ambulance,
+};
+
+const cacheColKey = (col) => `${col}:list`;
 
 router.get('/stats', auth(['superadmin']), async (req, res) => {
     try {
-        const [hospitals, doctors, ambulances, nurses, activeEmergencies] = await Promise.all([
+        const [hospitals, pharmacies, clinics, diagnostics, doctors, nurses, ambulances] = await Promise.all([
             Hospital.countDocuments(),
+            Pharmacy.countDocuments(),
+            Clinic.countDocuments(),
+            DiagnosticCenter.countDocuments(),
             Doctor.countDocuments(),
-            Ambulance.countDocuments(),
             Nurse.countDocuments(),
-            EmergencyRequest.countDocuments({ status: { $in: ['Pending', 'Accepted'] } })
+            Ambulance.countDocuments(),
         ]);
-        res.json({ hospitals, doctors, ambulances, nurses, activeEmergencies });
+        res.json({ hospitals, pharmacies, clinics, diagnostics, doctors, nurses, ambulances });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 router.post('/register-hospital', auth(['superadmin']), async (req, res) => {
     try {
-        const { hospitalId } = req.body;
+        const { hospitalId, password, ...rest } = req.body;
         if (await Hospital.findOne({ hospitalId })) return res.status(400).json({ message: 'Hospital ID exists' });
-        const h = new Hospital({ ...req.body, password: req.body.password || 'test@1234' });
+        if (!password) return res.status(400).json({ message: 'Password is required' });
+        const h = new Hospital({ hospitalId, password, ...rest });
         await h.save();
-        res.json({ message: 'Hospital registered', hospital: h });
+        cache.del('hospitals:list');
+        res.json({ message: 'Hospital registered', hospital: { hospitalId: h.hospitalId, name: h.name } });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// Master DBMS — list any collection
-const COLLECTIONS = { hospitals: Hospital, doctors: Doctor, nurses: Nurse, ambulances: Ambulance, emergencies: EmergencyRequest };
+router.post('/register-pharmacy', auth(['superadmin']), async (req, res) => {
+    try {
+        const { pharmacyId, password, ...rest } = req.body;
+        if (await Pharmacy.findOne({ pharmacyId })) return res.status(400).json({ message: 'Pharmacy ID exists' });
+        if (!password) return res.status(400).json({ message: 'Password is required' });
+        const p = new Pharmacy({ pharmacyId, password, ...rest });
+        await p.save();
+        cache.delByPrefix('pharmacy:list');
+        res.json({ message: 'Pharmacy registered', pharmacy: { pharmacyId: p.pharmacyId, name: p.name } });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/register-clinic', auth(['superadmin']), async (req, res) => {
+    try {
+        const { clinicId, password, ...rest } = req.body;
+        if (await Clinic.findOne({ clinicId })) return res.status(400).json({ message: 'Clinic ID exists' });
+        if (!password) return res.status(400).json({ message: 'Password is required' });
+        const c = new Clinic({ clinicId, password, ...rest });
+        await c.save();
+        cache.delByPrefix('clinic:list');
+        res.json({ message: 'Clinic registered', clinic: { clinicId: c.clinicId, name: c.name } });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/register-diagnostic', auth(['superadmin']), async (req, res) => {
+    try {
+        const { diagnosticId, password, name, email, contact, address, specialties, openingHours, ...rest } = req.body;
+        if (await DiagnosticCenter.findOne({ diagnosticId })) {
+            return error(res, 'Diagnostic ID exists', 'DUPLICATE', 400);
+        }
+        if (!password) return error(res, 'Password is required', 'VALIDATION', 400);
+        const center = new DiagnosticCenter({
+            diagnosticId,
+            name,
+            password,
+            email,
+            contact,
+            address,
+            specialties,
+            openingHours,
+        });
+        await center.save();
+        cache.delByPrefix('diagnostic:list');
+        return success(res, { diagnosticId: center.diagnosticId, name: center.name }, 'Diagnostic center registered', 201);
+    } catch (e) {
+        return error(res, e.message, 'ERROR', 500);
+    }
+});
+
 router.get('/master/:col', auth(['superadmin']), async (req, res) => {
     try {
         const Model = COLLECTIONS[req.params.col];
@@ -54,12 +110,73 @@ router.get('/master/:col', auth(['superadmin']), async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
+    try {
+        const { col, id } = req.body;
+        const Model = COLLECTIONS[col];
+        if (!Model) return error(res, 'Collection not found', 'NOT_FOUND', 404);
+
+        const doc = await Model.findById(id);
+        if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
+
+        const admin = await SuperAdmin.findById(req.user.id);
+        const email = admin.email || process.env.EMAIL_USER;
+        if (!email) return error(res, 'Superadmin email not configured', 'CONFIG', 500);
+
+        const otp = generateOtp();
+        const hashedOtp = await hashOtp(otp);
+
+        await OtpToken.findOneAndUpdate(
+            { email, purpose: 'master-delete' },
+            { otpHash: hashedOtp, attempts: 0, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
+            { upsert: true, new: true }
+        );
+
+        await sendOtpEmail(email, otp);
+        res.json({ message: 'OTP sent to superadmin email for deletion' });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 router.delete('/master/:col/:id', auth(['superadmin']), async (req, res) => {
     try {
+        const { otp, confirmation } = req.body;
+        if (confirmation !== 'DELETE') {
+            return error(res, 'Send confirmation: "DELETE"', 'VALIDATION', 400);
+        }
+
+        const admin = await SuperAdmin.findById(req.user.id);
+        const email = admin.email || process.env.EMAIL_USER;
+
+        const tokenDoc = await OtpToken.findOne({ email, purpose: 'master-delete' }).sort({ createdAt: -1 });
+        if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
+        }
+
+        const isValid = await verifyOtp(otp, tokenDoc.otpHash);
+        if (!isValid) {
+            tokenDoc.attempts = (tokenDoc.attempts || 0) + 1;
+            await tokenDoc.save();
+            if (tokenDoc.attempts >= 5) {
+                await OtpToken.deleteOne({ _id: tokenDoc._id });
+                return error(res, 'Too many failed attempts. Request a new OTP.', 'OTP_LOCKED', 400);
+            }
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+
         const Model = COLLECTIONS[req.params.col];
         if (!Model) return res.status(404).json({ message: 'Collection not found' });
+
+        const doc = await Model.findById(req.params.id);
+        if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
+
         await Model.findByIdAndDelete(req.params.id);
-        res.json({ success: true });
+        await OtpToken.deleteOne({ _id: tokenDoc._id });
+
+        cache.delByPrefix(cacheColKey(req.params.col));
+        const idField = doc.hospitalId || doc.pharmacyId || doc.clinicId || doc.diagnosticId || doc.doctorId || doc.nurseId || doc.ambulanceId;
+        if (idField) cache.del(`${req.params.col.replace(/s$/, '')}:${idField}`);
+
+        res.json({ message: 'Deleted' });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 

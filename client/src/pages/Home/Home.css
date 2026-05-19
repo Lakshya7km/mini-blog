@@ -5,6 +5,76 @@
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
+.home-simple-hero {
+  padding: 48px 0 64px;
+}
+
+.home-simple-inner {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.home-simple-inner h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.home-role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 20px;
+}
+
+.home-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.home-role-chip:hover {
+  border-color: var(--role-color, var(--primary));
+  color: var(--role-color, var(--primary));
+}
+
+.home-role-chip.active {
+  border-color: var(--role-color, var(--primary));
+  background: color-mix(in srgb, var(--role-color, var(--primary)) 12%, white);
+  color: var(--role-color, var(--primary));
+}
+
+.home-login-card {
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.home-login-card-head {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--primary);
+  font-size: 14px;
+}
+
+.home-pick-role {
+  text-align: center;
+  padding: 24px 0;
+  font-size: 14px;
+}
+
 .classic-navbar {
   position: sticky;
   top: 0;

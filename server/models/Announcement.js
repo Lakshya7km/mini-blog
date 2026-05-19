@@ -1,13 +1,16 @@
 const mongoose = require('mongoose');
 
 const announcementSchema = new mongoose.Schema({
-    hospitalId: { type: String, required: true },
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-    priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
-    expiresAt: { type: Date, default: null },
-    createdAt: { type: Date, default: Date.now }
+    title:         { type: String, required: true },
+    message:       { type: String, required: true },
+    hospitalId:    { type: String },   // set if from hospital
+    clinicId:      { type: String },   // set if from clinic
+    expiresAt:     { type: Date },
+    createdAt:     { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Announcement', announcementSchema);
+announcementSchema.index({ expiresAt: 1 });
+announcementSchema.index({ hospitalId: 1 });
+announcementSchema.index({ clinicId: 1 });
 
+module.exports = mongoose.model('Announcement', announcementSchema);

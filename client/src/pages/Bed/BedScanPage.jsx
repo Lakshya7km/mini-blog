@@ -8,13 +8,12 @@ import ErrorBoundary from '../../components/ErrorBoundary'
 import { parseBedIdFromQR } from '../../lib/bedQr'
 
 const STATUS_COLORS = {
-  Vacant: '#22c55e',
+  Available: '#22c55e',
   Occupied: '#ef4444',
-  Reserved: '#f59e0b',
   Cleaning: '#8b5cf6',
 }
 
-const STATUSES = ['Vacant', 'Occupied', 'Reserved', 'Cleaning']
+const STATUSES = ['Available', 'Occupied', 'Cleaning']
 
 export default function BedScanPage() {
   const { bedId } = useParams()
@@ -77,7 +76,7 @@ export default function BedScanPage() {
       <div className="portal-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '100dvh' }}>
         <div className="text-center">
           <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto 14px' }} />
-          <p className="text-muted">Loading bed information...</p>
+          <p className="text-muted">Loading bed…</p>
         </div>
       </div>
     )
@@ -92,7 +91,7 @@ export default function BedScanPage() {
           </div>
           <h2 style={{ fontSize: 24, fontWeight: 800 }}>Bed not found</h2>
           <p className="text-muted" style={{ marginTop: 10 }}>{error}</p>
-          <button className="btn btn-primary" style={{ marginTop: 18 }} onClick={() => navigate('/')}>Return home</button>
+          <button type="button" className="btn btn-primary" style={{ marginTop: 18 }} onClick={() => navigate('/')}>Return home</button>
         </div>
       </div>
     )
@@ -104,8 +103,8 @@ export default function BedScanPage() {
         <div className="container" style={{ maxWidth: 540 }}>
           <section className="portal-header-card">
             <div className="portal-header-copy">
-              <h1>Bed status update</h1>
-              <p>Bedside workflow for ward staff and reception teams to confirm occupancy and update capacity in real time.</p>
+              <h1>Bed status</h1>
+              <p>Scan a bed QR label to view or update availability.</p>
               <div className="portal-meta">
                 <span className="portal-meta-chip"><BedDouble size={14} /> {bed?.hospitalId}</span>
                 <span className="portal-meta-chip"><QrCode size={14} /> {bed?.bedId}</span>
@@ -113,12 +112,11 @@ export default function BedScanPage() {
             </div>
           </section>
 
-          <div className="card" style={{ marginBottom: 14, borderTop: `4px solid ${STATUS_COLORS[bed.status]}` }}>
+          <div className="card" style={{ marginBottom: 14, borderTop: `4px solid ${STATUS_COLORS[bed.status] || '#94a3b8'}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}>
               <div>
-                <div style={{ fontSize: 26, fontWeight: 800 }}>{bed.bedNumber}</div>
-                <div className="text-muted">Ward {bed.wardNumber} | {bed.bedType}</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>ID: {bed.bedId}</div>
+                <div style={{ fontSize: 26, fontWeight: 800 }}>{bed.bedNumber || bed.bedId}</div>
+                <div className="text-muted">Ward {bed.wardNumber || '—'} · {bed.bedType}</div>
               </div>
               <span className="badge" style={{ background: `${STATUS_COLORS[bed.status]}20`, color: STATUS_COLORS[bed.status] }}>{bed.status}</span>
             </div>
@@ -130,14 +128,14 @@ export default function BedScanPage() {
 
           {!canUpdate ? (
             <div className="card" style={{ textAlign: 'center' }}>
-              <p className="text-muted">You must be signed in as a nurse or reception staff member to update bed status.</p>
-              <button className="btn btn-primary btn-full" style={{ marginTop: 14 }} onClick={() => navigate('/')}>Sign in</button>
+              <p className="text-muted">Sign in as nurse or reception to update this bed.</p>
+              <button type="button" className="btn btn-primary btn-full" style={{ marginTop: 14 }} onClick={() => navigate(`/?redirect=/bed/${bedId}`)}>Sign in</button>
             </div>
           ) : (
             <div>
               <div className="card" style={{ marginBottom: 14 }}>
-                <label className="form-label">Patient name when occupied</label>
-                <input className="form-input" value={patientName} onChange={(event) => setPatientName(event.target.value)} placeholder="Enter patient name" />
+                <label className="form-label">Patient name (when occupied)</label>
+                <input className="form-input" value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Enter patient name" />
               </div>
 
               <div className="card" style={{ marginBottom: 14 }}>
@@ -146,6 +144,7 @@ export default function BedScanPage() {
                   {STATUSES.map((status) => (
                     <button
                       key={status}
+                      type="button"
                       className="btn"
                       disabled={updating}
                       onClick={() => updateStatus(status)}
@@ -161,20 +160,20 @@ export default function BedScanPage() {
                 </div>
               </div>
 
-              <button className="btn btn-ghost btn-full" onClick={() => navigate('/')}>
+              <button type="button" className="btn btn-ghost btn-full" onClick={() => navigate('/')}>
                 <ArrowLeft size={15} />
                 Back
               </button>
               {!scanNext ? (
-                <button className="btn btn-outline btn-full" style={{ marginTop: 8 }} onClick={() => setScanNext(true)}>
+                <button type="button" className="btn btn-outline btn-full" style={{ marginTop: 8 }} onClick={() => setScanNext(true)}>
                   <QrCode size={15} />
                   Scan next bed
                 </button>
               ) : (
                 <div className="card" style={{ marginTop: 14 }}>
                   <div className="card-header" style={{ justifyContent: 'space-between' }}>
-                    <span className="card-title">Scan next QR code</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setScanNext(false)}>Cancel</button>
+                    <span className="card-title">Scan next bed QR</span>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setScanNext(false)}>Cancel</button>
                   </div>
                   <ErrorBoundary>
                     <QRScanner onScan={handleNextScan} />

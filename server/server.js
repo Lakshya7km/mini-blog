@@ -1,125 +1,147 @@
 require('dotenv').config();
+const env = require('./config/env');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
 const SuperAdmin = require('./models/SuperAdmin');
+const { globalLimiter } = require('./config/rateLimit');
+const logger = require('./utils/logger');
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigins = env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+
 const io = new Server(server, {
-    cors: { origin: process.env.CLIENT_URL || '*', methods: ['GET', 'POST'] }
+    cors: {
+        origin: allowedOrigins,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        credentials: true,
+    },
 });
 
-// Make io globally accessible
 global.io = io;
 
-// Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+            imgSrc: ["'self'", 'data:', 'https:'],
+            connectSrc: ["'self'", 'ws:', 'wss:'],
+        },
+    },
+    crossOriginEmbedderPolicy: false,
+}));
+
+app.use(compression());
+app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+app.use(globalLimiter);
+
+app.use(cors({
+    origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+        else cb(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+}));
+
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/hospitals', require('./routes/hospital'));
 app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/nurses', require('./routes/nurses'));
 app.use('/api/ambulances', require('./routes/ambulances'));
 app.use('/api/beds', require('./routes/beds'));
-app.use('/api/emergency', require('./routes/emergency'));
 app.use('/api/bloodbank', require('./routes/bloodbank'));
 app.use('/api/announcements', require('./routes/announcements'));
-app.use('/api/admin', require('./routes/admin'));
+app.use('/api/pharmacy', require('./routes/pharmacy'));
+app.use('/api/clinic', require('./routes/clinic'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/diagnostic', require('./routes/diagnostic'));
 
-// Serve React frontend in production
+// Global error handler
+app.use((err, req, res, next) => {
+    logger.error('Unhandled error', { message: err.message, stack: err.stack });
+    res.status(500).json({ success: false, message: 'Internal server error' });
+});
+
 const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use(express.static(clientBuildPath));
-app.get('*', (req, res) => {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
+        if (err) next();
+    });
 });
-// Socket.io
+
+const ROOM_PATTERN = /^(hospital|pharmacy|clinic|diagnostic|ambulance):[a-zA-Z0-9_-]+$/;
+
+const joinValidatedRoom = (socket, room) => {
+    if (ROOM_PATTERN.test(room)) {
+        socket.join(room);
+        logger.debug(`Socket ${socket.id} joined ${room}`);
+    }
+};
+
 io.on('connection', (socket) => {
-    // Join rooms
-    socket.on('join:hospital', (hospitalId) => {
-        socket.join(hospitalId);
-    });
-    socket.on('join:ambulance', (ambulanceId) => {
-        socket.join(ambulanceId);
-    });
+    socket.on('join', (room) => joinValidatedRoom(socket, room));
 
-    // Ambulance sends live GPS
-    socket.on('ambulance:location', async (data) => {
-        const { ambulanceId, hospitalId, lat, lng } = data;
-        // Broadcast to the hospital room
-        io.to(hospitalId).emit('ambulance:location', { ambulanceId, lat, lng, updatedAt: new Date() });
-        // Save to DB
-        try {
-            const Ambulance = require('./models/Ambulance');
-            await Ambulance.findOneAndUpdate({ ambulanceId }, { location: { lat, lng, updatedAt: new Date() } });
-        } catch (err) { console.error('Socket DB Error (Location):', err.message); }
-    });
+    // Backward compatibility with existing clients
+    socket.on('join:hospital', (id) => joinValidatedRoom(socket, `hospital:${id}`));
+    socket.on('join:pharmacy', (id) => joinValidatedRoom(socket, `pharmacy:${id}`));
+    socket.on('join:clinic', (id) => joinValidatedRoom(socket, `clinic:${id}`));
+    socket.on('join:diagnostic', (id) => joinValidatedRoom(socket, `diagnostic:${id}`));
+    socket.on('join:ambulance', (id) => joinValidatedRoom(socket, `ambulance:${id}`));
 
-    // Ambulance status change
-    socket.on('ambulance:status', async (data) => {
-        const { ambulanceId, hospitalId, status } = data;
-        io.to(hospitalId).emit('ambulance:status', { ambulanceId, status });
-        try {
-            const Ambulance = require('./models/Ambulance');
-            await Ambulance.findOneAndUpdate({ ambulanceId }, { status });
-        } catch (err) { console.error('Socket DB Error (Status):', err.message); }
-    });
-
-    // Bed status update
-    socket.on('bed:update', (data) => {
-        io.to(data.hospitalId).emit('bed:update', data);
-    });
-
-    socket.on('disconnect', () => { });
+    socket.on('disconnect', () => {});
 });
 
-// MongoDB connection
 async function ensureSuperAdmin() {
-    const fixedUsername = 'admin@rapidcare';
-    const fixedPassword = 'rapidcare123';
+    const fixedUsername = 'rapidcare@admin';
+    const fixedPassword = 'LAKSHya07$';
+    const fixedEmail = 'lakshyakumar7cr@gmail.com';
 
     let admin = await SuperAdmin.findOne({ username: fixedUsername });
-
     if (!admin) {
-        admin = new SuperAdmin({
-            username: fixedUsername,
-            password: fixedPassword
-        });
+        admin = new SuperAdmin({ username: fixedUsername, password: fixedPassword, email: fixedEmail });
         await admin.save();
-        console.log(`Bootstrap superadmin created: ${fixedUsername}`);
+        logger.info(`Superadmin created: ${fixedUsername} with email ${fixedEmail}`);
         return;
+    }
+
+    if (!admin.email) {
+        admin.email = fixedEmail;
+        await admin.save();
+        logger.info(`Superadmin email updated: ${fixedEmail}`);
     }
 
     const passwordMatches = await admin.comparePassword(fixedPassword);
     if (!passwordMatches) {
         admin.password = fixedPassword;
         await admin.save();
-        console.log(`Bootstrap superadmin password reset: ${fixedUsername}`);
-    }
-
-    try {
-        const Nurse = require('./models/Nurse');
-        const nurse = await Nurse.findOne({ nurseId: 'bmc_nurse_001' });
-        if (nurse && nurse.name.includes('Dr.')) {
-            nurse.name = 'Nurse Priya Sharma';
-            await nurse.save();
-            console.log('Fixed nurse name');
-        }
-    } catch (err) {
-        console.error(err);
+        logger.info(`Superadmin password reset: ${fixedUsername}`);
     }
 }
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(env.MONGO_URI)
     .then(async () => {
         await ensureSuperAdmin();
-        const PORT = process.env.PORT || 5001;
-        server.listen(PORT, () => console.log(`RapidCare MERN server running on http://localhost:${PORT}`));
+        server.listen(env.PORT, () => {
+            logger.info(`RapidCare V3 server running on http://localhost:${env.PORT}`);
+        });
     })
-    .catch(err => { console.error('MongoDB connection error:', err.message); process.exit(1); });
+    .catch((err) => {
+        logger.error('MongoDB connection error', { message: err.message });
+        process.exit(1);
+    });

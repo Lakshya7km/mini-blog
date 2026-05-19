@@ -7,9 +7,9 @@ import ErrorBoundary from '../../../components/ErrorBoundary'
 import QRCode from 'qrcode'
 import { parseBedIdFromQR, buildBedQrUrl, getBedQrBaseUrl } from '../../../lib/bedQr'
 
-const STATUS_COLORS = { Vacant: '#22c55e', Occupied: '#ef4444', Reserved: '#f59e0b', Cleaning: '#8b5cf6' }
-const STATUSES = ['Vacant', 'Occupied', 'Reserved', 'Cleaning']
-const BED_TYPES = ['General', 'ICU', 'Private', 'Emergency', 'HDU', 'Day Care']
+const STATUS_COLORS = { Available: '#22c55e', Occupied: '#ef4444', Cleaning: '#8b5cf6' }
+const STATUSES = ['Available', 'Occupied', 'Cleaning']
+const BED_TYPES = ['General', 'ICU', 'Private', 'Emergency', 'Maternity', 'Pediatric']
 
 export default function BedManagement({ hospitalId }) {
     const [beds, setBeds] = useState([])
@@ -28,7 +28,7 @@ export default function BedManagement({ hospitalId }) {
     const [patientName, setPatientName] = useState('')
 
     const load = useCallback(() => {
-        api.get(`/beds?hospitalId=${hospitalId}`).then(r => { setBeds(r.data); setFiltered(r.data) }).finally(() => setLoading(false))
+        api.get(`/beds?hospitalId=${hospitalId}`).then(r => { setBeds(Array.isArray(r.data) ? r.data : []); setFiltered(Array.isArray(r.data) ? r.data : []) }).catch(() => setMsg('Failed to load beds')).finally(() => setLoading(false))
     }, [hospitalId])
 
     useEffect(() => { load() }, [load])
@@ -42,9 +42,12 @@ export default function BedManagement({ hospitalId }) {
     }, [beds, search, filterStatus, filterType])
 
     useEffect(() => {
-        socket.on('bed:update', () => load())
-        return () => socket.off('bed:update')
-    }, [load])
+        socket.connect()
+        socket.emit('join:hospital', hospitalId)
+        const onBedUpdate = () => load()
+        socket.on('bed:update', onBedUpdate)
+        return () => socket.off('bed:update', onBedUpdate)
+    }, [load, hospitalId])
 
     const createBulk = async () => {
         await api.post('/beds/bulk', { hospitalId, ...createForm })
@@ -146,9 +149,13 @@ ${cards.join('\n')}
 </html>`
 
             const win = window.open('', '_blank')
+            if (!win) {
+                setMsg('Popup blocked. Please allow popups for this site to print QR labels.')
+                return
+            }
             win.document.write(html)
             win.document.close()
-            setTimeout(() => win.print(), 500)
+            setTimeout(() => { try { win.print() } catch { setMsg('Print failed. Try saving as PDF instead.') } }, 500)
         } catch (e) {
             setMsg(e?.message || 'Failed to generate QR labels')
         } finally {
@@ -156,7 +163,7 @@ ${cards.join('\n')}
         }
     }
 
-    const stats = { Vacant: 0, Occupied: 0, Reserved: 0, Cleaning: 0 }
+    const stats = { Available: 0, Occupied: 0, Cleaning: 0 }
     beds.forEach(b => stats[b.status]++)
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>
@@ -180,7 +187,7 @@ ${cards.join('\n')}
     return (
         <div>
             {/* Stats */}
-            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                 {STATUSES.map(s => (
                     <div key={s} className="stat-card" style={{ '--accent': STATUS_COLORS[s] }}>
                         <div className="stat-val">{stats[s]}</div>

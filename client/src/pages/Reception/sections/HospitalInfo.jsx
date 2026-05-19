@@ -22,12 +22,13 @@ export default function HospitalInfo({ hospitalId }) {
 
     const save = async () => {
         setSaving(true); setMsg('')
+        const payload = { ...form }
         // Extract lat/lng from Google Maps URL
-        if (form.googleMapUrl) {
-            const m = form.googleMapUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
-            if (m) form.location = { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+        if (payload.googleMapUrl) {
+            const m = payload.googleMapUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+            if (m) payload.location = { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
         }
-        await api.put(`/hospitals/${hospitalId}`, form)
+        await api.put(`/hospitals/${hospitalId}`, payload)
         setMsg('Saved successfully!'); setSaving(false)
     }
 

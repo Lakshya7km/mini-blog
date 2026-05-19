@@ -10,8 +10,7 @@
         "postinstall": "cd server && npm install && cd ../client && npm install",
         "dev": "concurrently \"npm run server\" \"npm run client\"",
         "server": "cd server && npm run dev",
-        "client": "cd client && npm run dev",
-        "seed": "cd server && npm run seed"
+        "client": "cd client && npm run dev"
     },
     "dependencies": {
         "bcrypt": "^6.0.0",
