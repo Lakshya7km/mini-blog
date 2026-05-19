@@ -152,7 +152,7 @@ router.post('/change-password', otpLimiter, async (req, res) => {
         const email = user.email;
         if (!email) return error(res, 'No registered email found for this user', 'VALIDATION', 400);
 
-        const tokenDoc = await OtpToken.findOne({ email, purpose: 'password-change' });
+        const tokenDoc = await OtpToken.findOne({ email, purpose: 'password-change' }).sort({ createdAt: -1 });
         if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
             if (tokenDoc) await OtpToken.deleteOne({ _id: tokenDoc._id });
             return error(res, 'Invalid or expired OTP', 'OTP_EXPIRED', 400);

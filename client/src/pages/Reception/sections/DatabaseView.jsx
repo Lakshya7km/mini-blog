@@ -17,7 +17,7 @@ export default function DatabaseView({ hospitalId }) {
         setLoading(true)
         const col = COLLECTIONS.find(c => c.key === selected)
         const endpoint = `/${selected}?hospitalId=${hospitalId}`
-        api.get(endpoint).then(r => setData(r.data)).finally(() => setLoading(false))
+        api.get(endpoint).then(r => setData(Array.isArray(r.data) ? r.data : [])).finally(() => setLoading(false))
     }
 
     useEffect(() => { load() }, [selected, hospitalId])

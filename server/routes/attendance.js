@@ -65,7 +65,7 @@ router.post('/override', auth(['hospital']), async (req, res) => {
     try {
         const hospitalId = req.user.hospitalId || req.user.ref;
         const { doctorId, date, status } = req.body;
-        if (!doctorId || !date || !['Present', 'Absent'].includes(status)) {
+        if (!doctorId || typeof doctorId !== 'string' || !date || !['Present', 'Absent'].includes(status)) {
             return error(res, 'doctorId, date, and status are required', 'VALIDATION', 400);
         }
 

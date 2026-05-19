@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
 const Announcement = require('../models/Announcement');
 const cache = require('../utils/cache');
@@ -54,6 +55,7 @@ router.post('/', auth(['hospital', 'clinic']), async (req, res) => {
 
 router.delete('/:id', auth(['hospital', 'clinic']), async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         const a = await Announcement.findById(req.params.id);
         if (!a) return res.status(404).json({ message: 'Not found' });
         

@@ -101,7 +101,7 @@ router.get('/:pharmacyId/medicines', async (req, res) => {
 router.post('/:pharmacyId/medicines', auth(['pharmacy']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.pharmacyId) return res.status(403).json({ message: 'Forbidden' });
-        const m = new Medicine({ ...req.body, pharmacyId: req.params.pharmacyId });
+        const m = new Medicine({ ...pickAllowed(req.body, ['name', 'medicineNumber', 'category', 'requiresPrescription', 'inStock']), pharmacyId: req.params.pharmacyId });
         await m.save();
         res.json(m);
     } catch (e) { res.status(500).json({ message: e.message }); }
@@ -118,7 +118,7 @@ router.patch('/:pharmacyId/medicines/:medicineId', auth(['pharmacy']), async (re
         );
         
         cache.del(`pharmacy:${req.params.pharmacyId}`);
-        cache.del('pharmacy:list');
+        cache.delByPrefix('pharmacy:list');
 
         if (m && global.io) {
             global.io.to(`pharmacy:${m.pharmacyId}`).emit('pharmacy:stock', {

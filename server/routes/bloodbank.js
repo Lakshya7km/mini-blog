@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
 const BloodBank = require('../models/BloodBank');
 const Donor = require('../models/Donor');
@@ -32,6 +33,7 @@ router.post('/upsert', auth(['hospital']), async (req, res) => {
     try {
         const { hospitalId, bloodType, units } = req.body;
         if (req.user.ref !== hospitalId) return res.status(403).json({ message: 'Forbidden' });
+        if (typeof bloodType !== 'string') return res.status(400).json({ message: 'Invalid bloodType' });
         
         const b = await BloodBank.findOneAndUpdate(
             { hospitalId, bloodType },
@@ -65,6 +67,7 @@ router.post('/donors', async (req, res) => {
 
 router.put('/donors/:id', auth(['hospital']), async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         const d = await Donor.findById(req.params.id);
         if (!d) return res.status(404).json({ message: 'Not found' });
         if (req.user.ref !== d.hospitalId) return res.status(403).json({ message: 'Forbidden' });

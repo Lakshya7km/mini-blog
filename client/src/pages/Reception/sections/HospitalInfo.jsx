@@ -28,8 +28,13 @@ export default function HospitalInfo({ hospitalId }) {
             const m = payload.googleMapUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
             if (m) payload.location = { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
         }
-        await api.put(`/hospitals/${hospitalId}`, payload)
-        setMsg('Saved successfully!'); setSaving(false)
+        try {
+            await api.put(`/hospitals/${hospitalId}`, payload)
+            setMsg('Saved successfully!')
+        } catch (e) {
+            setMsg(e.response?.data?.message || 'Save failed.')
+        }
+        setSaving(false)
     }
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>

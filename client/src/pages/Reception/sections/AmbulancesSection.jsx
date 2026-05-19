@@ -34,6 +34,7 @@ export default function AmbulancesSection({ hospitalId }) {
         api.get(`/hospitals/${hospitalId}`).then(r => setHospital(r.data))
         socket.connect()
         socket.emit('join:hospital', hospitalId)
+        return () => { socket.disconnect() }
     }, [hospitalId])
 
     useEffect(() => {
@@ -63,15 +64,23 @@ export default function AmbulancesSection({ hospitalId }) {
 
     const saveEmt = async () => {
         if (!editingEmt) return
-        await api.put(`/ambulances/${editingEmt.ambulanceId}`, { emt: { ...editingEmt.emt, ...editEmtForm } })
-        setEditingEmt(null); load()
+        try {
+            await api.put(`/ambulances/${editingEmt.ambulanceId}`, { emt: { ...editingEmt.emt, ...editEmtForm } })
+            setEditingEmt(null); load()
+        } catch (e) {
+            alert(e.response?.data?.message || 'Failed to save EMT')
+        }
     }
 
     const assignTask = async () => {
         if (!assigningTask) return
-        await api.put(`/ambulances/${assigningTask.ambulanceId}`, { assignedTask: taskString })
-        setAssigningTask(null); setTaskString('')
-        load()
+        try {
+            await api.put(`/ambulances/${assigningTask.ambulanceId}`, { assignedTask: taskString })
+            setAssigningTask(null); setTaskString('')
+            load()
+        } catch (e) {
+            alert(e.response?.data?.message || 'Failed to assign task')
+        }
     }
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>

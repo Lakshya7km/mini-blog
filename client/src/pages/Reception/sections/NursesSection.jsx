@@ -13,9 +13,13 @@ export default function NursesSection({ hospitalId }) {
     useEffect(() => { load() }, [hospitalId])
 
     const create = async () => {
-        await api.post('/nurses', { ...form, hospitalId })
-        setAdding(false); load(); setMsg('Nurse registered!')
-        setForm({ nurseId: '', name: '', mobile: '', password: '' })
+        try {
+            await api.post('/nurses', { ...form, hospitalId })
+            setAdding(false); load(); setMsg('Nurse registered!')
+            setForm({ nurseId: '', name: '', mobile: '', password: '' })
+        } catch (e) {
+            setMsg(e.response?.data?.message || 'Registration failed.')
+        }
     }
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>

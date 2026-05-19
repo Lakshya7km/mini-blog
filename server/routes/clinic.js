@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -85,7 +86,7 @@ router.put('/:clinicId', auth(['clinic']), async (req, res) => {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
         const updates = pickAllowed(req.body, CLINIC_ALLOWED);
         const c = await Clinic.findOneAndUpdate({ clinicId: req.params.clinicId }, { $set: updates }, { new: true }).select('-password');
-        cache.del('clinic:list');
+        cache.delByPrefix('clinic:list');
         cache.del(`clinic:${req.params.clinicId}`);
         res.json(c);
     } catch (e) { res.status(500).json({ message: e.message }); }
@@ -127,6 +128,7 @@ router.get('/:clinicId/appointments', auth(['clinic']), async (req, res) => {
 router.put('/:clinicId/appointments/:requestId', auth(['clinic']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return error(res, 'Forbidden', 'FORBIDDEN', 403);
+        if (!mongoose.Types.ObjectId.isValid(req.params.requestId)) return error(res, 'Invalid request ID', 'VALIDATION', 400);
         const appt = await AppointmentRequest.findById(req.params.requestId);
         if (!appt || appt.clinicId !== req.params.clinicId) {
             return error(res, 'Appointment not found', 'NOT_FOUND', 404);
@@ -198,7 +200,7 @@ router.get('/:clinicId/services', async (req, res) => {
 router.post('/:clinicId/services', auth(['clinic']), async (req, res) => {
     try {
         if (req.user.ref !== req.params.clinicId) return res.status(403).json({ message: 'Forbidden' });
-        const s = new ClinicService({ ...req.body, clinicId: req.params.clinicId });
+        const s = new ClinicService({ ...pickAllowed(req.body, ['name', 'description', 'available']), clinicId: req.params.clinicId });
         await s.save();
         res.json(s);
     } catch (e) { res.status(500).json({ message: e.message }); }

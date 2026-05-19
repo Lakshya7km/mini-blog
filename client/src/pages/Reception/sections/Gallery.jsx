@@ -15,14 +15,23 @@ export default function Gallery({ hospitalId }) {
         const files = Array.from(e.target.files).slice(0, 10 - images.length)
         if (!files.length) return
         setUploading(true)
-        const fd = new FormData(); files.forEach(f => fd.append('images', f))
-        await api.post(`/hospitals/${hospitalId}/gallery`, fd)
-        await load(); setMsg('Uploaded!'); setUploading(false)
+        try {
+            const fd = new FormData(); files.forEach(f => fd.append('images', f))
+            await api.post(`/hospitals/${hospitalId}/gallery`, fd)
+            await load(); setMsg('Uploaded!')
+        } catch (e) {
+            setMsg(e.response?.data?.message || 'Upload failed.')
+        }
+        setUploading(false)
     }
 
     const remove = async (url) => {
-        await api.delete(`/hospitals/${hospitalId}/gallery`, { data: { imageUrl: url } })
-        setImages(imgs => imgs.filter(i => i !== url))
+        try {
+            await api.delete(`/hospitals/${hospitalId}/gallery`, { data: { imageUrl: url } })
+            setImages(imgs => imgs.filter(i => i !== url))
+        } catch (e) {
+            setMsg(e.response?.data?.message || 'Remove failed.')
+        }
     }
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>

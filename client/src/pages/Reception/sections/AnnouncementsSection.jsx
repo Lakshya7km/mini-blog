@@ -25,19 +25,27 @@ export default function AnnouncementsSection({ hospitalId }) {
     useEffect(() => { load() }, [hospitalId])
 
     const create = async () => {
-        const payload = { ...form, hospitalId }
-        if (form.expiresIn) {
-            const minutes = parseInt(form.expiresIn, 10)
-            payload.expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+        try {
+            const payload = { ...form, hospitalId }
+            if (form.expiresIn) {
+                const minutes = parseInt(form.expiresIn, 10)
+                payload.expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+            }
+            delete payload.expiresIn
+            await api.post('/announcements', payload)
+            setAdding(false); load(); setForm({ title: '', content: '', priority: 'Medium', expiresIn: '' })
+        } catch (e) {
+            alert(e.response?.data?.message || 'Failed to create announcement')
         }
-        delete payload.expiresIn
-        await api.post('/announcements', payload)
-        setAdding(false); load(); setForm({ title: '', content: '', priority: 'Medium', expiresIn: '' })
     }
 
     const remove = async (id) => {
-        await api.delete(`/announcements/${id}`)
-        setList(l => l.filter(a => a._id !== id))
+        try {
+            await api.delete(`/announcements/${id}`)
+            setList(l => l.filter(a => a._id !== id))
+        } catch (e) {
+            alert(e.response?.data?.message || 'Failed to delete announcement')
+        }
     }
 
     if (loading) return <div className="loader-center"><div className="spinner" /></div>

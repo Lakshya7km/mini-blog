@@ -137,7 +137,8 @@ export default function PublicPortal() {
 
     const navigateToLocation = (loc, name) => {
         const dest = loc?.lat ? `${loc.lat},${loc.lng}` : encodeURIComponent(name);
-        window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+        const win = window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+        if (!win) return;
     };
 
     const nearest = (userPos && filtered.length > 0 && filtered[0].distance < 9999) ? filtered[0] : null;

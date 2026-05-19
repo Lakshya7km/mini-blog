@@ -71,7 +71,7 @@ router.put('/:diagnosticId', auth(['diagnostic']), async (req, res) => {
             { $set: updates },
             { new: true }
         ).select('-password');
-        cache.del('diagnostic:list');
+        cache.delByPrefix('diagnostic:list');
         cache.del(`diagnostic:${req.params.diagnosticId}`);
         return success(res, center, 'Profile updated');
     } catch (e) {
@@ -96,7 +96,7 @@ router.post('/:diagnosticId/imageUrls', auth(['diagnostic']), async (req, res) =
         center.imageUrls = [...(center.imageUrls || []), imageUrl];
         await center.save();
 
-        cache.del('diagnostic:list');
+        cache.delByPrefix('diagnostic:list');
         cache.del(`diagnostic:${req.params.diagnosticId}`);
         return success(res, center.toObject(), 'Image added');
     } catch (e) {
@@ -117,7 +117,7 @@ router.delete('/:diagnosticId/imageUrls', auth(['diagnostic']), async (req, res)
             { new: true }
         ).select('-password');
 
-        cache.del('diagnostic:list');
+        cache.delByPrefix('diagnostic:list');
         cache.del(`diagnostic:${req.params.diagnosticId}`);
         return success(res, center, 'Image removed');
     } catch (e) {

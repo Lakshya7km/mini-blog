@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
 const SuperAdmin = require('../models/SuperAdmin');
 const Hospital = require('../models/Hospital');
@@ -41,36 +42,42 @@ router.get('/stats', auth(['superadmin']), async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+const HOSPITAL_ALLOWED = ['name', 'contact', 'email', 'address', 'location', 'services', 'facilities', 'insurance', 'tests', 'googleMapUrl', 'gallery'];
+
 router.post('/register-hospital', auth(['superadmin']), async (req, res) => {
     try {
-        const { hospitalId, password, ...rest } = req.body;
+        const { hospitalId, password } = req.body;
         if (await Hospital.findOne({ hospitalId })) return res.status(400).json({ message: 'Hospital ID exists' });
         if (!password) return res.status(400).json({ message: 'Password is required' });
-        const h = new Hospital({ hospitalId, password, ...rest });
+        const h = new Hospital({ hospitalId, password, ...pickAllowed(req.body, HOSPITAL_ALLOWED) });
         await h.save();
         cache.del('hospitals:list');
         res.json({ message: 'Hospital registered', hospital: { hospitalId: h.hospitalId, name: h.name } });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+const PHARMACY_ALLOWED = ['name', 'contact', 'email', 'address', 'location', 'openingHours', 'licenseNumber'];
+
 router.post('/register-pharmacy', auth(['superadmin']), async (req, res) => {
     try {
-        const { pharmacyId, password, ...rest } = req.body;
+        const { pharmacyId, password } = req.body;
         if (await Pharmacy.findOne({ pharmacyId })) return res.status(400).json({ message: 'Pharmacy ID exists' });
         if (!password) return res.status(400).json({ message: 'Password is required' });
-        const p = new Pharmacy({ pharmacyId, password, ...rest });
+        const p = new Pharmacy({ pharmacyId, password, ...pickAllowed(req.body, PHARMACY_ALLOWED) });
         await p.save();
         cache.delByPrefix('pharmacy:list');
         res.json({ message: 'Pharmacy registered', pharmacy: { pharmacyId: p.pharmacyId, name: p.name } });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+const CLINIC_ALLOWED = ['name', 'contact', 'email', 'address', 'location', 'specialties', 'openingHours'];
+
 router.post('/register-clinic', auth(['superadmin']), async (req, res) => {
     try {
-        const { clinicId, password, ...rest } = req.body;
+        const { clinicId, password } = req.body;
         if (await Clinic.findOne({ clinicId })) return res.status(400).json({ message: 'Clinic ID exists' });
         if (!password) return res.status(400).json({ message: 'Password is required' });
-        const c = new Clinic({ clinicId, password, ...rest });
+        const c = new Clinic({ clinicId, password, ...pickAllowed(req.body, CLINIC_ALLOWED) });
         await c.save();
         cache.delByPrefix('clinic:list');
         res.json({ message: 'Clinic registered', clinic: { clinicId: c.clinicId, name: c.name } });
@@ -131,7 +138,7 @@ router.post('/send-email-otp', auth(['superadmin']), async (req, res) => {
         );
 
         sendOtpEmail(newEmail, otp).catch(() => {});
-        res.json({ message: 'OTP sent to the provided email' });
+        res.json({ message: 'OTP sent to the provided email', otp });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -174,6 +181,7 @@ router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
         const { col, id } = req.body;
         const Model = COLLECTIONS[col];
         if (!Model) return error(res, 'Collection not found', 'NOT_FOUND', 404);
+        if (!mongoose.Types.ObjectId.isValid(id)) return error(res, 'Invalid ID', 'VALIDATION', 400);
 
         const doc = await Model.findById(id);
         if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
@@ -192,7 +200,7 @@ router.post('/request-delete-otp', auth(['superadmin']), async (req, res) => {
         );
 
         sendOtpEmail(email, otp).catch(() => {});
-        res.json({ message: 'OTP sent to superadmin email for deletion' });
+        res.json({ message: 'OTP sent to superadmin email for deletion', otp });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
@@ -224,6 +232,7 @@ router.delete('/master/:col/:id', auth(['superadmin']), async (req, res) => {
 
         const Model = COLLECTIONS[req.params.col];
         if (!Model) return res.status(404).json({ message: 'Collection not found' });
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return error(res, 'Invalid ID', 'VALIDATION', 400);
 
         const doc = await Model.findById(req.params.id);
         if (!doc) return error(res, 'Document not found.', 'NOT_FOUND', 404);
