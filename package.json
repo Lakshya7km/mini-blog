@@ -5,7 +5,7 @@
         "node": ">=20.19.0"
     },
     "scripts": {
-        "start": "cd server && npm start",
+        "start": "node index.js",
         "build": "cd client && npm run build",
         "postinstall": "cd server && npm install && cd ../client && npm install",
         "dev": "concurrently \"npm run server\" \"npm run client\"",
