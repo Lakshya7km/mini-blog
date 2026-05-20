@@ -107,7 +107,7 @@ export default function PublicPortal() {
         }
 
         setFiltered(f);
-    }, [search, viewType, hospitals, clinics, pharmacies, userPos]);
+    }, [search, viewType, hospitals, clinics, pharmacies, userPos, clinicServices, pharmacyMeds]);
 
     // Data fetching effect
     useEffect(() => {
